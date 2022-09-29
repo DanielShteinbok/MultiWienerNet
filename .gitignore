@@ -11,7 +11,9 @@ ipython_config.py
 *.npy 
 *.pt
 /tensorflow/saved_models/*
+tensorflow/epochdata/*
 /pytorch/saved_models/*
 /pytorch/saved_data/*
 /data/multiWienerPSFStack_40z_aligned.mat
+/data/*
 /pytorch/2D deconvolution demo (pretrained).ipynb
