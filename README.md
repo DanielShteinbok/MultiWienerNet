@@ -36,7 +36,7 @@ jupyter-notebook --no-browser --port=8888
 ```
 Copy the link is printed by jupyter (it should start as `https://localhost:8888`...)
 
-*NOTE:* if the number is not 8888 above, you should change the 8888 in the instructions below to match.
+**NOTE:** if the number is not 8888 above, you should change the 8888 in the instructions below to match.
 
 Open up a new terminal window, and run:
 ```shell
