@@ -1,5 +1,12 @@
 # MultiWienerNet
 ## Deep learning for fast spatially-varying deconvolution 
+This is a modified clone of the project by the Waller Lab, find the original [here](https://github.com/Waller-Lab/MultiWienerNet).
+Set up as detailed in "my setup":
+### My Setup:
+install Miniconda or Anaconda. Then, run:
+```bash
+conda env create -f reproduce.yml
+```
 
 ### [Project Page](https://waller-lab.github.io/MultiWienerNet/) | [Paper](https://doi.org/10.1364/OPTICA.442438)
 
