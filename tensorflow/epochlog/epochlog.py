@@ -1,3 +1,4 @@
+import os
 class EpochLogger:
     """
     Solves the problem of intermittent training.
@@ -51,18 +52,19 @@ class EpochLogger:
         # in the future can create a new file if one does not exist
         try:
             self.epochlog = open(self.logpath, 'r+')
-        except Exception:
-            raise Exception
-        self.num_epochs = 0
+            self.num_epochs = int(self.epochlog.readline())
+        except FileNotFoundError:
+            os.makedirs(os.path.dirname(self.logpath))
+            self.epochlog = open(self.logpath, 'w+')
+            self.num_epochs = 0
+            self.epochlog.write('0')
         
     def load_weights(self):
+        # FIXME should get rid of this, decide whether to load weights upon function instantiation
+        # (?) Decide on this!
         """
-        load the weights, and figure out how many epochs we've done
+        load the weights
         """
-        try:
-            self.num_epochs = int(self.epochlog.readline())
-        except:
-            raise Exception("Unexpected log file contents")
         # if the number of epochs > 0, assume there are weights to load
         # if there are not weights to load, that means something has gone wrong
         # and we should fail fatally
