@@ -21,6 +21,7 @@ def encoder_block(x, filters, kernel_size, padding='same', dilation_rate=1, pool
     """
     Encoder block used in contracting path of UNet.
     """
+    # EXAMINE: line below is repeated twice? Is this a mistake?
     x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
     x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
     x_skip = x
@@ -53,6 +54,7 @@ def decoder_block(x, x_skip, filters, kernel_size, padding='same', dilation_rate
         x_skip = layers.Cropping2D(cropping=cropping)(x_skip)
         x = layers.concatenate([x, x_skip], axis=3)
 
+    # EXAMINE: line below is repeated THRICE? Is this a mistake???
     x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
     x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
     x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
@@ -72,6 +74,7 @@ def decoder_block_resize(x, x_skip, filters, kernel_size, padding='same', dilati
     x = tf.image.resize(x, x_skip.shape[1:3], method='nearest')
     
     x = layers.concatenate([x, x_skip], axis=3)
+    # EXAMINE: line below is repeated THRICE? Is this a mistake???
     x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
     x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
     x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
