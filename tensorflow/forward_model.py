@@ -135,7 +135,7 @@ def sim_data(im,H,weights,crop_indices):
 def load_weights(h_path='/home/kyrollos/LearnedMiniscope3D/RandoscopePSFS/SVD_2_5um_PSF_5um_1_ds4_dsz1_comps_green_SubAvg.mat',
                 weights_path = '/home/kyrollos/LearnedMiniscope3D/RandoscopePSFS/SVD_2_5um_PSF_5um_1_ds4_dsz1_weights_green_SubAvg.mat'):
     h=scipy.io.loadmat(h_path) 
-    weights=scipy.io.loadmat(weights_path)
+    weights=scipy.io.loadmat(weights_path )
 
     depth_plane=0 #NOTE Z here is 1 less than matlab file as python zero index. So this is z31 in matlab
 
