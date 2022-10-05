@@ -11,6 +11,8 @@ from scipy.interpolate import griddata
 
 
 def  register_psfs(stack,ref_im,dct_on=True):
+    # stack is the (h, w, c)-dimensioned set of the PSFs, all at one layer (as passed in by process_psf_for_svd.ipynb)
+    # ref_im is e.g. stack[:,:,4] (it is that in process_psf_for_svd.ipynb)
 
     [Ny, Nx] = stack[:,:,0].shape;
     vec = lambda x: x.ravel()
@@ -30,14 +32,28 @@ def  register_psfs(stack,ref_im,dct_on=True):
 
 
     #     % Normalize the stack first
+    # M-entry vector of zeros
     stack_norm = np.zeros((1,M));
+    
+    # by-value copy of stack
     stack_dct = stack*1;
+    
+    # calculate the Frobenius norm of ref_im
     ref_norm = np.linalg.norm(ref_im,'fro');
+    
+    # iterate through each of the PSFs
     for m in range (M):
+        # stack_norm is just a 1D vector--the 0 index is for 'semantics'
+        # set the mth entry in stack_norm to the Frobenius norm of the mth PSF
         stack_norm[0,m] = np.linalg.norm(stack_dct[:,:,m],'fro');
+        
+        # normalize stack_dct by the appropriate Frobenius norm
         stack_dct[:,:,m] = stack_dct[:,:,m]/stack_norm[0,m];
+        
+        # normalize stack by the appropriate Frobenius norm
         stack[:,:,m] = stack[:,:,m]/ref_norm;
 
+    # normalize reference image according to its norm, calc'd above
     ref_im = ref_im/ref_norm;
 
 
@@ -49,8 +65,12 @@ def  register_psfs(stack,ref_im,dct_on=True):
 
     if dct_on:
         print('Removing background\n')
+        
+        # iterate through PSFs; consider nth PSF
         for n in range (stack_dct.shape[2]):
+            # im is the nth PSF
             im = stack_dct[:,:,n];
+            # scipy.fftpack.dct: Discrete Cosine Transform
             bg_dct = dct(im);
             bg_dct[0:19,0:19] = 0;
 
