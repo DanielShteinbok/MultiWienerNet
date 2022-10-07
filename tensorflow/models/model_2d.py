@@ -148,6 +148,21 @@ def UNet_multiwiener_resize(height, width, initial_psfs, initial_Ks,
         - decoding_cs: list of channels along expansive path
         - skip_connections: list of boolean to determine whether to concatenate with decoding channel at that index
     """
+    # ADDED:
+    # initial_psfs.shape is (486, 648, 9), i.e. (H, W, C)
+    # ensure the PSF is no larger than requirements, in which case throw an error
+    hdiff = height - initial_psfs.shape[0]
+    wdiff = width - initial_psfs.shape[1]
+    
+    if hdiff < 0 or wdiff < 0:
+        raise ValueError("initial PSF larger than expected size")
+    # Pad PSF with zeros to the specified height and width so that it ends up in the middle
+    elif hdiff > 0 or wdiff > 0:
+        initial_psfs = np.pad(initial_psfs,
+                              ((np.math.ceil(hdiff/2), np.math.floor(hdiff/2)),
+                              (np.math.ceil(wdiff/2), np.math.floor(wdiff/2)),
+                              (0,0)))
+        
 
     inputs = tf.keras.Input((height, width, 1))
     
