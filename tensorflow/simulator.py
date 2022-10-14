@@ -1,6 +1,6 @@
 # needed for ImageSimulator
 #import tensorflow as tf
-import forward_model as fm
+import forward_model_tf as fm
 import matplotlib.pyplot as plt
 import imageio
 import numpy as np
@@ -10,8 +10,11 @@ import os
 
 # class that allows you to load weights upon instantiation, then just pass images in and get images out
 class ImageSimulator:
-    def __init__(self, h_path, weights_path):
-        self.H, self.weights, self.crop_indices = fm.load_weights(h_path=h_path, weights_path=weights_path)
+    def __init__(self, h_path, weights_path, input_4d=False):
+        if input_4d:
+            self.H, self.weights, self.crop_indices = fm.load_weights(h_path=h_path, weights_path=weights_path)
+        else:
+            self.H, self.weights, self.crop_indices = fm.load_weights_2d(h_path=h_path, weights_path=weights_path)
     def simulate(self, objectPath):
         '''
         objectPath: str path to the image to be simulated.

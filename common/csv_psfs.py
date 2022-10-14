@@ -14,7 +14,10 @@ def load_from_dir(psfs_path):
     # open and append each to the psfs array,
     psfs = []
     for path in psf_paths:
-        psfs.append(np.loadtxt(path, delimiter=',', encoding='utf-8-sig'))
+        # need the next line when dealing with Excel CSVs, which have a signature byte at beginning of contents
+        #psfs.append(np.loadtxt(path, delimiter=',', encoding='utf-8-sig'))
+        # with the ZOS-API script I wrote, no signature at the beginning
+        psfs.append(np.loadtxt(path, delimiter=','))
     # convert the psfs array to an np.ndarray
     psfs = np.transpose(np.asarray(psfs), (1,2,0))
     return psfs

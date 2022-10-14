@@ -168,3 +168,41 @@ def load_weights(h_path='/home/kyrollos/LearnedMiniscope3D/RandoscopePSFS/SVD_2_
         H[:,:,i]=(np.fft.fft2(pad2d(h[:,:,i])))
         Hconj[:,:,i]=(np.conj(H[:,:,i]))
     return H,weights,[rcL,rcU,ccL,ccU]
+
+# load in forward model weights
+def load_weights_2d(h_path='../data/nV3_h.mat',
+                weights_path = '../data/nV3_weights.mat'):
+    h=scipy.io.loadmat(h_path) 
+    weights=scipy.io.loadmat(weights_path )
+
+    #depth_plane=0 #NOTE Z here is 1 less than matlab file as python zero index. So this is z31 in matlab
+
+    h=h['array_out']
+    weights=weights['array_out']
+    # make sure its (x,y,z,r)
+    #h=np.swapaxes(h,2,3)
+    #weights=np.swapaxes(weights,2,3)
+
+    #h=h[:,:,depth_plane,:]
+    #weights=weights[:,:,depth_plane,:]
+
+    # Normalize weights to have maximum sum through rank of 1
+    weights_norm = np.max(np.sum(weights[np.shape(weights)[0]//2-1,np.shape(weights)[1]//2-1,:],0))
+    weights = weights/weights_norm;
+
+    #normalize by norm of all stack. Can also try normalizing by max of all stack or by norm of each slice
+    h=h/np.linalg.norm(np.ravel(h))
+
+    # padded values for 2D
+
+    ccL = np.shape(h)[1]//2
+    ccU = 3*np.shape(h)[1]//2
+    rcL = np.shape(h)[0]//2
+    rcU = 3*np.shape(h)[0]//2
+
+    H=np.ndarray((np.shape(h)[0]*2,np.shape(h)[1]*2,np.shape(h)[2]), dtype=complex)
+    Hconj=np.ndarray((np.shape(h)[0]*2,np.shape(h)[1]*2,np.shape(h)[2]),dtype=complex)
+    for i in range (np.shape(h)[2]):
+        H[:,:,i]=(np.fft.fft2(pad2d(h[:,:,i])))
+        Hconj[:,:,i]=(np.conj(H[:,:,i]))
+    return H,weights,[rcL,rcU,ccL,ccU]
