@@ -26,7 +26,7 @@ class ImageSimulator:
         im_in=imageio.v2.imread(objectPath)
         
         # TODO only resize if necessary
-        im=cv2.resize(im_in,(648,486))
+        im=cv2.resize(im_in,(self.weights.shape[1],self.weights.shape[0]))
             
         # if there are multiple channels, average them and convert to grayscale
         if len(im.shape) > 2:
@@ -41,19 +41,21 @@ class ImageSimulator:
         # im is of type np.ndarray
         return im, fm.sim_data(im,self.H,self.weights,self.crop_indices)
 
-def sim_from_pathlist(h_path, weights_path, pathlist, output_dir):
+def sim_from_pathlist(h_path, weights_path, pathlist, output_dir_simmed, output_dir_resized=None):
     '''
     pathlist: list of str, with each element being a path to a file
     output_dir: str, the directory into which to dump the simulated files
     '''
     # if output_dir does not exist, create it
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    if not os.path.exists(output_dir_simmed):
+        os.makedirs(output_dir_simmed)
     
     # create the simulator
     simulator = ImageSimulator(h_path, weights_path)
     # go through each path in pathlist, open the image, simulate it, and 
     for path in pathlist:
-        _, sim = simulator.simulate(path)
+        im, sim = simulator.simulate(path)
         # FIXME: imwrite automatically converts pixels from float64 to uint8, which may result in data loss.
-        imageio.imwrite(output_dir.strip('/') + '/' + os.path.basename(path), sim)
+        imageio.imwrite(output_dir_simmed.removesuffix('/') + '/' + os.path.basename(path), sim)
+        if not output_dir_resized is None:
+            imageio.imwrite(output_dir_resized.removesuffix('/') + '/' + os.path.basename(path), im)

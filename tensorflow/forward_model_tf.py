@@ -110,6 +110,11 @@ def grad_adj(v):  #adj of gradient is negative divergence
     return z
 
 def sim_data(im,H,weights,crop_indices):
+    # ADDED BY ME
+    # replace magic numbers with the actual dimensions of the image
+    width = im.shape[1]
+    height = im.shape[0]
+    
     mu=0
     sigma=np.random.rand(1)*0.02+0.005 #abit much maybe 0.04 best0.04+0.01
     PEAK=np.random.rand(1)*1000+50
@@ -122,8 +127,10 @@ def sim_data(im,H,weights,crop_indices):
 
     p_noise = np.random.poisson(sim * PEAK)/PEAK
 
-    g_noise= np.random.normal(mu, sigma, 648*486)
-    g_noise=np.reshape(g_noise,(486,648))
+    #g_noise= np.random.normal(mu, sigma, 648*486)
+    #g_noise=np.reshape(g_noise,(486,648))
+    g_noise= np.random.normal(mu, sigma, width*height)
+    g_noise=np.reshape(g_noise,(height,width))
     sim=sim+g_noise+p_noise
     sim=sim/np.max(sim)
     sim=np.maximum(sim,0)
