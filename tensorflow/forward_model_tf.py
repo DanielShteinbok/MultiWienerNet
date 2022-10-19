@@ -109,7 +109,7 @@ def grad_adj(v):  #adj of gradient is negative divergence
     z -= np.gradient(v[1,:,:])[1]
     return z
 
-def sim_data(im,H,weights,crop_indices):
+def sim_data(im,H,weights,crop_indices, add_noise=True):
     # ADDED BY ME
     # replace magic numbers with the actual dimensions of the image
     width = im.shape[1]
@@ -129,9 +129,10 @@ def sim_data(im,H,weights,crop_indices):
 
     #g_noise= np.random.normal(mu, sigma, 648*486)
     #g_noise=np.reshape(g_noise,(486,648))
-    g_noise= np.random.normal(mu, sigma, width*height)
-    g_noise=np.reshape(g_noise,(height,width))
-    sim=sim+g_noise+p_noise
+    if add_noise:
+        g_noise= np.random.normal(mu, sigma, width*height)
+        g_noise=np.reshape(g_noise,(height,width))
+        sim=sim+g_noise+p_noise
     sim=sim/np.max(sim)
     sim=np.maximum(sim,0)
     sim=sim/np.max(sim)
