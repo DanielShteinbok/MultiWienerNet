@@ -22,7 +22,7 @@ def nocrop(x):
 def nopad(x):
     return x
 
-def A_2d_svd(x,H,weights,pad,mode='shift_variant'): #NOTE, H is already padded outside to save memory
+def A_2d_svd(x,H,weights,pad,mode='shift_variant', extra_shift=True): #NOTE, H is already padded outside to save memory
     x=pad(x)
     Y=np.zeros((np.shape(x)[0],np.shape(x)[1]))
         
@@ -30,8 +30,10 @@ def A_2d_svd(x,H,weights,pad,mode='shift_variant'): #NOTE, H is already padded o
         for r in range (0,np.shape(weights)[2]):
             X=np.fft.fft2((np.multiply(pad(weights[:,:,r]),x)))
             Y=Y+ np.multiply(X,H[:,:,r])
-    
-    return np.real((np.fft.ifftshift(np.fft.ifft2(Y))))
+    if extra_shift:
+        return np.real((np.fft.ifftshift(np.fft.ifft2(Y))))
+    return np.real(np.fft.ifft2(Y))
+
 
 def A_2d(x,psf,pad):
     X=np.fft.fft2((pad(x)))
@@ -109,7 +111,7 @@ def grad_adj(v):  #adj of gradient is negative divergence
     z -= np.gradient(v[1,:,:])[1]
     return z
 
-def sim_data(im,H,weights,crop_indices, add_noise=True):
+def sim_data(im,H,weights,crop_indices, add_noise=True, extra_shift=True):
     # ADDED BY ME
     # replace magic numbers with the actual dimensions of the image
     width = im.shape[1]
@@ -121,7 +123,7 @@ def sim_data(im,H,weights,crop_indices, add_noise=True):
 
     I=im/np.max(im)
     #I[I<0.12]=0
-    sim=crop2d(A_2d_svd(I,H,weights,pad2d),*crop_indices)
+    sim=crop2d(A_2d_svd(I,H,weights,pad2d,extra_shift=extra_shift),*crop_indices)
     sim=sim/np.max(sim)
     sim=np.maximum(sim,0)
 
