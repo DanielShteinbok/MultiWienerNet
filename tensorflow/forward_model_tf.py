@@ -32,7 +32,7 @@ def A_2d_svd(x,H,weights,pad,mode='shift_variant', extra_shift=True): #NOTE, H i
             Y=Y+ np.multiply(X,H[:,:,r])
     if extra_shift:
         return np.real((np.fft.ifftshift(np.fft.ifft2(Y))))
-    return np.real(np.fft.ifft2(Y))
+    return np.real((np.fft.ifft2(Y)))
 
 
 def A_2d(x,psf,pad):
