@@ -3,6 +3,17 @@ import os
 import numpy as np
 import csv
 
+class MetaMan:
+    def __init__(self, meta_path):
+        self.shifts = {}
+        with open(meta_path, newline='', encoding='utf-8-sig') as file:
+            reader = csv.DictReader(file)
+            for row in reader:
+                num = int(row["Field Number"])
+                self.shifts[num] = [int(float(row["X image (px)"])), int(float(row["Y image (px)"]))]
+    
+    
+
 def pad_to_position(psf, centerpoint, img_dims):
     """
     zero-pad a PSF so its centerpoint ends up at the centerpoint coordinate
@@ -54,12 +65,12 @@ def load_PSFs_csv(psfs_path, meta_path, img_dims):
         psfs: an ndarray of the PSFs.
     """
     # open up the meta csv file, append each row to a list:
-    meta_list = []
-    with open(meta_path, newline='', encoding='utf-8-sig') as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            meta_list.append(row)
-            
+#     meta_list = []
+#     with open(meta_path, newline='', encoding='utf-8-sig') as file:
+#         reader = csv.DictReader(file)
+#         for row in reader:
+#             meta_list.append(row)
+    metaman = MetaMan(meta_path)        
     
     # expect a directory with a bunch of PSFs therein as separate csvs;
     # list out all csv file names in the directory
@@ -71,7 +82,8 @@ def load_PSFs_csv(psfs_path, meta_path, img_dims):
         #psfs[0].append(np.loadtxt(path, delimiter=',', encoding='utf-8-sig'))
         fieldnum = int(os.path.basename(path).removeprefix("F").removesuffix(".csv"))
         unpadded_psf = np.loadtxt(path, delimiter=',')
-        centerpoint = (int(float(meta_list[fieldnum-1]["X image (px)"])), int(float(meta_list[fieldnum-1]["Y image (px)"])))
+        #centerpoint = (int(float(meta_list[fieldnum-1]["X image (px)"])), int(float(meta_list[fieldnum-1]["Y image (px)"])))
+        centerpoint = metaman.shifts[fieldnum]
         try:
             padded_psf = pad_to_position(unpadded_psf, centerpoint, img_dims)
             psfs[0].append(padded_psf)
