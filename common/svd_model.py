@@ -113,7 +113,10 @@ def  register_psfs(stack,ref_im,dct_on=True):
     
     return yi_reg,si
 
-def calc_svd(yi_reg,si,rnk):    
+def calc_svd(yi_reg,si,rnk,method='nearest'):  
+    # NOTE: any velue of method except 'nearest' will lead to NaNs being inserted outside the 
+    # convex hull of the points given in si. This will lead to lots of problems down the line.
+    # An error of "lam value too large" produced by the poisson noise function could be due to these NaNs.
     [Ny, Nx] = yi_reg[:,:,0].shape;
     print('creating matrix\n')
     Mgood = yi_reg.shape[2];
@@ -156,7 +159,7 @@ def calc_svd(yi_reg,si,rnk):
     for r in range(rnk):
     #     interpolant_r = scatteredInterpolant(si_mat(2,:)', si_mat(1,:)', weights(:,r),'natural','nearest');
     #     weights_interp(:,:,r) = rot90(interpolant_r(Xq,Yq),2);
-        weights_interp[:,:,r]=griddata((xi,yi),weights[:,r],(Xq,Yq),method='nearest')
+        weights_interp[:,:,r]=griddata((xi,yi),weights[:,r],(Xq,Yq),method=method)
 
     print('done\n\n')
 
