@@ -15,7 +15,7 @@ class ImageSimulator:
             self.H, self.weights, self.crop_indices = fm.load_weights(h_path=h_path, weights_path=weights_path)
         else:
             self.H, self.weights, self.crop_indices = fm.load_weights_2d(h_path=h_path, weights_path=weights_path)
-    def simulate(self, objectPath):
+    def simulate(self, objectPath, my_simulation=True):
         '''
         objectPath: str path to the image to be simulated.
         
@@ -39,6 +39,8 @@ class ImageSimulator:
                 # there are more than 3 dimensions to the image. something is wrong.
                 raise ValueError("image passed is " + str(len(im.shape)) + "-dimensional?!?!")
         # im is of type np.ndarray
+        if my_simulation:
+            return im, fm.sim_data(im,self.H,self.weights,self.crop_indices, a_svd_func=fm.my_A_2d_svd)
         return im, fm.sim_data(im,self.H,self.weights,self.crop_indices)
 
 def sim_from_pathlist(h_path, weights_path, pathlist, output_dir_simmed, output_dir_resized=None):

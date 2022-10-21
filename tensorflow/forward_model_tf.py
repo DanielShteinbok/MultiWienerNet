@@ -5,6 +5,11 @@ def pad2d (x):
     Nx=np.shape(x)[1]
     return np.pad(x,((Ny//2,Ny//2),(Nx//2,Nx//2)),'constant', constant_values=(0))
 
+def pad2d_weights (x):
+    Ny=np.shape(x)[0]
+    Nx=np.shape(x)[1]
+    return np.pad(x,((Ny//2,Ny//2),(Nx//2,Nx//2), (0,0)),'constant', constant_values=(0))
+
 def pad4d(x):
     Ny=np.shape(x)[0]
     Nx=np.shape(x)[1]
@@ -28,12 +33,31 @@ def A_2d_svd(x,H,weights,pad,mode='shift_variant', extra_shift=True): #NOTE, H i
         
     if (mode =='shift_variant'):
         for r in range (0,np.shape(weights)[2]):
-            X=np.fft.fft2((np.multiply(pad(weights[:,:,r]),x)))
+            #X=np.fft.fft2((np.multiply(pad(weights[:,:,r]),x)))
+            X=np.fft.fft2(np.multiply(pad(weights[:,:,r]),x), axes=(0,1))
             Y=Y+ np.multiply(X,H[:,:,r])
     if extra_shift:
         return np.real((np.fft.ifftshift(np.fft.ifft2(Y))))
-    return np.real((np.fft.ifft2(Y)))
+    return np.real(np.fft.ifft2(Y, axes=(0,1)))
 
+def my_A_2d_svd(x,H,weights,pad,mode='shift_variant', extra_shift=True): #NOTE, H is already padded outside to save memory
+    '''
+    My version of the above function, which I think will be clearer and do a better job.
+    '''
+    x=pad(x)
+    wx = x.reshape(x.shape[0], x.shape[1], 1)*pad2d_weights(weights)
+    WX = np.fft.fft2(wx, axes=(0,1)) # shape is (Nx, Ny, K) where we did a rank-K SVD. We are doing FFT in the first two axes,
+    # leaving the r-axis (which signifies index of eigen-PSF) untouched.
+    return np.real( # cast to real. Result IS real to begin with, but is of complex type because IFFT returns complex in general
+        #- # we want to invert the final image, because it will be returned inverted (not sure why...)
+        np.sum( # sum over the K largest singular values. In my notebook this is summation through r
+            np.fft.ifftshift(np.fft.ifft2( # inverse-fourier transform, breaks without the ifftshift
+                WX*H # multiplication in the Fourier domain is a convolution in the original domain
+            ,axes=(0,1))) # again, leave r-axis untouched
+        ,-1) # this bracket closes summation through the r-axis, which is the last axis (hence -1).
+    )
+    
+    
 
 def A_2d(x,psf,pad):
     X=np.fft.fft2((pad(x)))
@@ -111,7 +135,7 @@ def grad_adj(v):  #adj of gradient is negative divergence
     z -= np.gradient(v[1,:,:])[1]
     return z
 
-def sim_data(im,H,weights,crop_indices, add_noise=True, extra_shift=True):
+def sim_data(im,H,weights,crop_indices, add_noise=True, extra_shift=True, a_svd_func=A_2d_svd):
     # ADDED BY ME
     # replace magic numbers with the actual dimensions of the image
     width = im.shape[1]
@@ -123,7 +147,8 @@ def sim_data(im,H,weights,crop_indices, add_noise=True, extra_shift=True):
 
     I=im/np.max(im)
     #I[I<0.12]=0
-    sim=crop2d(A_2d_svd(I,H,weights,pad2d,extra_shift=extra_shift),*crop_indices)
+    #sim=crop2d(A_2d_svd(I,H,weights,pad2d,extra_shift=extra_shift),*crop_indices)
+    sim=crop2d(a_svd_func(I,H,weights,pad2d,extra_shift=extra_shift),*crop_indices)
     sim=sim/np.max(sim)
     sim=np.maximum(sim,0)
 
@@ -197,7 +222,8 @@ def load_weights_2d(h_path='../data/nV3_h.mat',
     #weights=weights[:,:,depth_plane,:]
 
     # Normalize weights to have maximum sum through rank of 1
-    weights_norm = np.max(np.sum(weights[np.shape(weights)[0]//2-1,np.shape(weights)[1]//2-1,:],0))
+#     weights_norm = np.max(np.sum(weights[np.shape(weights)[0]//2-1,np.shape(weights)[1]//2-1,:],0))
+    weights_norm = np.absolute(np.max(np.sum(weights[np.shape(weights)[0]//2-1,np.shape(weights)[1]//2-1,:],0)))
     weights = weights/weights_norm;
 
     #normalize by norm of all stack. Can also try normalizing by max of all stack or by norm of each slice
