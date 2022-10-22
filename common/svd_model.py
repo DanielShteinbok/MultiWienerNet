@@ -159,7 +159,9 @@ def calc_svd(yi_reg,si,rnk,method='nearest'):
     for r in range(rnk):
     #     interpolant_r = scatteredInterpolant(si_mat(2,:)', si_mat(1,:)', weights(:,r),'natural','nearest');
     #     weights_interp(:,:,r) = rot90(interpolant_r(Xq,Yq),2);
+        # BELOW IS WRONG: should be (y,x) rather than (x,y)
         weights_interp[:,:,r]=griddata((xi,yi),weights[:,r],(Xq,Yq),method=method)
+        #weights_interp[:,:,r]=griddata((yi,xi),weights[:,r],(Yq,Xq),method=method)
 
     print('done\n\n')
 

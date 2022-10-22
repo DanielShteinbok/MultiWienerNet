@@ -1,7 +1,10 @@
 import glob
 import numpy as np
 
-def load_from_dir(psfs_path):
+# for sorting
+import os
+
+def load_from_dir(psfs_path, sort_psfs=False):
     """
     load a stack of PSFs as all the CSV files from the specified directory
     
@@ -12,6 +15,10 @@ def load_from_dir(psfs_path):
     psf_paths = glob.glob(psfs_path.removesuffix('/') + '/*')
     # iterate through that list,
     # open and append each to the psfs array,
+    
+    # TODO: sort psf_paths by name of PSF
+    if sort_psfs:
+        psf_paths.sort(key = lambda path: int(os.path.basename(path).removeprefix("F").removesuffix(".csv")))
     psfs = []
     for path in psf_paths:
         # need the next line when dealing with Excel CSVs, which have a signature byte at beginning of contents
