@@ -5,13 +5,44 @@ import csv
 
 class MetaMan:
     def __init__(self, meta_path):
-        self.shifts = {}
+        self.data = []
         with open(meta_path, newline='', encoding='utf-8-sig') as file:
             reader = csv.DictReader(file)
             for row in reader:
-                num = int(row["Field Number"])
-                self.shifts[num] = [int(float(row["X image (px)"])), int(float(row["Y image (px)"]))]
+                self.data.append(row)
+#         self.shifts = {}
+#         with open(meta_path, newline='', encoding='utf-8-sig') as file:
+#             reader = csv.DictReader(file)
+#             for row in reader:
+#                 num = int(row["Field Number"])
+#                 self.shifts[num] = [int(float(row["X image (px)"])), int(float(row["Y image (px)"]))]
+    @property
+    def shifts(self):
+        """
+        Get the [x,y] position of the center of the PSF in the image space, in pixels.
+        Returns a dictionary, so shifts[fieldnum] = [x, y]
+        the pixel values returned are integers
+        """
+        shifts = {}
+        for row in self.data:
+            num = int(row["Field Number"])
+#             shifts[num] = [int(float(row["X image (px)"])), int(float(row["Y image (px)"]))]
+            shifts[num] = [-int(float(row["X image (px)"])), -int(float(row["Y image (px)"]))]
+        return shifts
     
+    @property
+    def field_origins(self):
+        """
+        Get the [x,y] position of the origin of the field in microns.
+        x, y are floats. See shifts.help for usage
+        """
+        origins = {}
+        for row in self.data:
+            num = int(row["Field Number"])
+            origins[num] = [float(row["X (mm)"])*1000, float(row["Y (mm)"])*1000]
+            # invert the origins... this is a LIE! but a necessary one for now...
+#             origins[num] = [float(row["X (mm)"])*-1000, float(row["Y (mm)"])*-1000]
+        return origins
     
 
 def pad_to_position(psf, centerpoint, img_dims):
@@ -26,8 +57,8 @@ def pad_to_position(psf, centerpoint, img_dims):
     Returns:
         ndarray of shape img_dims
     """
-    hdiff = img_dims[1] - psf.shape[0]
-    wdiff = img_dims[0] - psf.shape[1]
+    hdiff = img_dims[0] - psf.shape[0]
+    wdiff = img_dims[1] - psf.shape[1]
     
     # In the future, these could be used in another way
     # Now, I'm just catching the error and discarding the image

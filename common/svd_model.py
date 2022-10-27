@@ -167,3 +167,114 @@ def calc_svd(yi_reg,si,rnk,method='nearest'):
 
     return np.flip(comps,-1), np.flip(weights_interp,-1)
 
+def calc_svd_shiftlist(yi_reg,si_list,rnk,method='nearest'):  
+    # NOTE: any velue of method except 'nearest' will lead to NaNs being inserted outside the 
+    # convex hull of the points given in si. This will lead to lots of problems down the line.
+    # An error of "lam value too large" produced by the poisson noise function could be due to these NaNs.
+    # this is the same function as calc_svd, but allows us to pass a list of shifts directly
+    [Ny, Nx] = yi_reg[:,:,0].shape;
+    print('creating matrix\n')
+    Mgood = yi_reg.shape[2];
+    ymat = np.zeros((Ny*Nx,Mgood));
+    ymat=yi_reg.reshape(( yi_reg.shape[0]* yi_reg.shape[1], yi_reg.shape[2]),order='F')
+
+    print('done\n')
+
+    print('starting svd...\n')
+
+    print('check values of ymat')
+    [u,s,v] = svds(ymat,rnk);
+
+
+    comps = np.reshape(u,[Ny, Nx,rnk],order='F');
+    vt = v*1
+    # s=np.flip(s)
+    # vt=np.flipud(vt)
+    weights = np.zeros((Mgood,rnk));
+    for m  in range (Mgood):
+        for r in range(rnk):
+            weights[m,r]=s[r]*vt[r,m]
+
+
+    # si_mat = reshape(cell2mat(si)',[2,Mgood]);
+    xq = np.arange(-Nx/2,Nx/2);
+    yq = np.arange(-Ny/2,Ny/2);
+    [Xq, Yq] = np.meshgrid(xq,yq);
+
+    weights_interp = np.zeros((Ny, Nx,rnk));
+    xi=[]
+    yi=[]
+    # si_list passed directly as ordered list
+    #si_list=list(si.values())
+
+    for i in range(len(si_list)):
+        xi.append(si_list[i][0])
+        yi.append(si_list[i][1])
+
+    print('interpolating...\n')
+    for r in range(rnk):
+    #     interpolant_r = scatteredInterpolant(si_mat(2,:)', si_mat(1,:)', weights(:,r),'natural','nearest');
+    #     weights_interp(:,:,r) = rot90(interpolant_r(Xq,Yq),2);
+        # BELOW IS WRONG: should be (y,x) rather than (x,y)
+        weights_interp[:,:,r]=griddata((xi,yi),weights[:,r],(Xq,Yq),method=method)
+        #weights_interp[:,:,r]=griddata((yi,xi),weights[:,r],(Yq,Xq),method=method)
+
+    print('done\n\n')
+
+    return np.flip(comps,-1), np.flip(weights_interp,-1)
+
+def calc_svd_indexed(yi_reg,si,index_table,rnk,method='nearest'):  
+    # NOTE: any velue of method except 'nearest' will lead to NaNs being inserted outside the 
+    # convex hull of the points given in si. This will lead to lots of problems down the line.
+    # An error of "lam value too large" produced by the poisson noise function could be due to these NaNs.
+    # this is the same function as calc_svd, but allows us to pass a list of shifts directly
+    [Ny, Nx] = yi_reg[:,:,0].shape;
+    print('creating matrix\n')
+    Mgood = yi_reg.shape[2];
+    ymat = np.zeros((Ny*Nx,Mgood));
+    ymat=yi_reg.reshape(( yi_reg.shape[0]* yi_reg.shape[1], yi_reg.shape[2]),order='F')
+
+    print('done\n')
+
+    print('starting svd...\n')
+
+    print('check values of ymat')
+    [u,s,v] = svds(ymat,rnk);
+
+
+    comps = np.reshape(u,[Ny, Nx,rnk],order='F');
+    vt = v*1
+    # s=np.flip(s)
+    # vt=np.flipud(vt)
+    weights = np.zeros((Mgood,rnk));
+    for m  in range (Mgood):
+        for r in range(rnk):
+            weights[m,r]=s[r]*vt[r,m]
+
+
+    # si_mat = reshape(cell2mat(si)',[2,Mgood]);
+    xq = np.arange(-Nx/2,Nx/2);
+    yq = np.arange(-Ny/2,Ny/2);
+    [Xq, Yq] = np.meshgrid(xq,yq);
+
+    weights_interp = np.zeros((Ny, Nx,rnk));
+    xi=[]
+    yi=[]
+    # si_list passed directly as ordered list
+    #si_list=list(si.values())
+
+    for index in index_table:
+        xi.append(si[index][0])
+        yi.append(si[index][1])
+
+    print('interpolating...\n')
+    for r in range(rnk):
+    #     interpolant_r = scatteredInterpolant(si_mat(2,:)', si_mat(1,:)', weights(:,r),'natural','nearest');
+    #     weights_interp(:,:,r) = rot90(interpolant_r(Xq,Yq),2);
+        # BELOW IS WRONG: should be (y,x) rather than (x,y)
+        weights_interp[:,:,r]=griddata((xi,yi),weights[:,r],(Xq,Yq),method=method)
+        #weights_interp[:,:,r]=griddata((yi,xi),weights[:,r],(Yq,Xq),method=method)
+
+    print('done\n\n')
+
+    return np.flip(comps,-1), np.flip(weights_interp,-1)
