@@ -65,6 +65,41 @@ class ImageSimulator:
         sim = fm.sim_data(im,self.H,self.weights,self.crop_indices)
         return im, sim
         #return im, fm.sim_data(im,self.H,self.weights,self.crop_indices)
+        
+    def simulate_matrix(self, im_in, my_simulation=True, add_noise=True):
+        last_time = time.time_ns() # TIMING
+        
+        # TODO only resize if necessary
+        im=cv2.resize(im_in,(self.weights.shape[1],self.weights.shape[0]))
+
+        print(f"{'Resized image in:' : <10}{time.time_ns()-last_time : >20}") # TIMING
+            
+        last_time = time.time_ns() # TIMING
+        # if there are multiple channels, average them and convert to grayscale
+        if len(im.shape) > 2:
+            if len(im.shape) == 3:
+                # the image is 2D, with some number of channels
+                print("image has " + str(im.shape[2]) + " channels. Converting to grayscale.")
+                # set each "pixel" to the average intensity of the three channels
+                im=np.sum(im,-1)/im.shape[2]
+            else:
+                # there are more than 3 dimensions to the image. something is wrong.
+                raise ValueError("image passed is " + str(len(im.shape)) + "-dimensional?!?!")
+
+        print(f"{'Converted to grayscalse in:' : <10}{time.time_ns()-last_time : >20}") # TIMING
+
+        last_time = time.time_ns() # TIMING
+        # im is of type np.ndarray
+        if my_simulation:
+            sim = fm.sim_data(im,self.H,self.weights,self.crop_indices, a_svd_func=fm.my_A_2d_svd)
+            print(f"{'Simulated in:' : <10}{time.time_ns()-last_time : >20}") # TIMING
+            return im, sim
+            #return im, fm.sim_data(im,self.H,self.weights,self.crop_indices, a_svd_func=fm.my_A_2d_svd)
+
+        print(f"{'Simulated in:' : <10}{time.time_ns()-last_time : >20}") # TIMING
+        sim = fm.sim_data(im,self.H,self.weights,self.crop_indices,add_noise=add_noise)
+        return im, sim
+        #return im, fm.sim_data(im,self.H,self.weights,self.crop_indices)
 
 def sim_from_pathlist(h_path, weights_path, pathlist, output_dir_simmed, output_dir_resized=None):
     '''

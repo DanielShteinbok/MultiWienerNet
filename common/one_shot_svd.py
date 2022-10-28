@@ -79,3 +79,10 @@ def save_generated(h, weights, h_save_path, weights_save_path):
     scipy.io.savemat(h_save_path, h_dict)
     weights_dict = {"array_out": weights}
     scipy.io.savemat(weights_save_path, weights_dict)
+
+# TODO: for warp-convolve architecture, whereby we first multiply pixels by weights, then warp the resulting image in spatial domain,
+# then convolve the warped image with the PSFs in the Fourier domain, we need some stuff:
+# we need to produce, save and later load an entire shifts array, which is 3-dimensional: e.g. shape=(800, 1280, 2) where the last dimension
+# separates the positions to which to shift this point in the X-direction and Y-direction.
+# Also, need a version of the above-given one-shot SVD methods for generation and saving with only center-padding.
+# Also, need an altered version of the simulator which implements this warp-convolve algorithm.
