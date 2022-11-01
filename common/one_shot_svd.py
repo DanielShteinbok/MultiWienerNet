@@ -222,8 +222,13 @@ def interpolate_shifts(metaman, img_dims, obj_dims):
     shifts = metaman.shifts
     origins = metaman.field_origins
     for key in shifts.keys():
-        x_shifts.append(shifts[key][0])
-        y_shifts.append(shifts[key][1])
+        #x_shifts.append(shifts[key][0])
+        # we need x_shifts and y_shifts to all be positive,
+        # to represent points on the image plane
+        x_shifts.append(shifts[key][0] + img_dims[1]/2)
+        y_shifts.append(shifts[key][1] + img_dims[0]/2)
+        # origins can be 0 at center of image, because the meshgrids
+        # range over (-dim/2, dim/2)
         x_origin.append(origins[key][0])
         y_origin.append(origins[key][1])
     
@@ -248,7 +253,70 @@ def interpolate_shifts(metaman, img_dims, obj_dims):
     # We now need to consolidate these via modular arithmetic.
     modular_shifts = x_int + img_dims[1]*y_int
 
+    # turn modular shift values of all points that are shifted out of the FOV to our magic number
+    strong_negative = -1025 # < -32*32
+    modular_shifts[x_int < 0 or x_int > img_dims[1]] = strong_negative # we know to filter these points out
+
     return np.ravel(modular_shifts)
+
+def mul_dense_sparse_shift(dense_matrix, csc_matrix, shifts, img_dims, ker_dims, out_cols, out_rows, out_vals):
+    """
+    Do left-multiplication of a CSC matrix by a dense matrix
+    because this isn't implemented in scipy (lol)
+    and then shift by the appropriate value in a given ndarray of shifts
+
+    For instance, let dense_matrix be the p-by-k matrix of kernel weights for each pixel
+    let csc_matrix be the k-by-b compressed-sparse-column matrix representing the kernels;
+    very useful if csc_matrix also has all nonzero values concentrated within a few rows
+    (as is the case with registered PSFs)
+    let shifts be the p-vector of modular-encoded shifts
+    Parameters:
+        dense_matrix: of type np.ndarray, with shape (a, b)
+        csc_matrix: of type scipy.sparse.csc_matrix with shape (b, c)
+    Returns:
+        (data, col_ind, row_ind) corresponding to a CSR matrix
+    """
+    # we need the transpose of our dense matrix because broadcastable indexing does so in the first axis
+    # we want this first axis to be the columns of the input dense matrix
+    #dense_transpose = dense_matrix.swapaxes(0,1)
+    # create a view of dense_transpose to use henceforth which has irelevant columns removed
+    # (that is, irrelevant rows of dense_matrix)
+    # by means of dense_matrix[shifts > 0 and shifts < img_dims[0]*img_dims[1]]
+    dense_transpose = dense_matrix[shifts > 0 and shifts < img_dims[0]*img_dims[1]].swapaxes(0,1)
+    
+    # iterate through columns of our csc_matrix
+    for j in range(len(csc_matrix.indptr) -1):
+        
+        # list of indices of nonzero values in the jth column of the sparse matrix
+        jth_col_ind = csc_matrix.indices[csc_matrix.indptr[j]:csc_matrix.indptr[j+1]]
+
+        col_ind_shifted = jth_col_ind \
+                + img_dims[1]*(img_dims[0]//2-1) + (img_dims[0]//2 - 1) \
+                + ker_dims[1]*(ker_dims[0]//2-1) + (ker_dims[0]//2 - 1) \
+                + int(shifts[pixel_ind])) 
+
+        # TODO: verify that this particular column is not irrelevant; 
+        # if it is irrelevant, continue
+        in_fov_selector = col_ind_shifted > 0 and col_ind_shifted < img_dims[0]*img_dims[1]
+        if not np.all(in_fov_selector):
+            continue
+
+        # extract the elements in col_ind_shifted which are still in view
+        #px_ind_in_fov = col_ind_shifted[col_ind_shifted > 0 and col_ind_shifted < img_dims[0]*img_dims[1]]
+        px_ind_in_fov = col_ind_shifted[in_fov_selector]
+
+        # extract relevant columns of dense_matrix
+        relevant_columns = dense_transpose[px_ind_in_fov]
+
+        # want to pointwise multiply the values of the jth column of the sparse matrix
+        # by the relevant columns, then sum the result along the second axis
+        # pointwise multiplication happens along last axis, so we need to transpose relevant_columns
+        # this gives us the list of values in the jth column of the output matrix
+        out_data = np.sum(relevant_columns.swapaxes(0,1)*csc_matrix.data[csc_matrix.indptr[j]:csc_matrix.indptr[j+1]], 1)
+
+
+
+
 
 def make_metamat(psfs_directory, psf_meta_path, img_dims, obj_dims):
     # SKETCH OF THE SOLUTION:
@@ -274,6 +342,10 @@ def make_metamat(psfs_directory, psf_meta_path, img_dims, obj_dims):
     # and a values vector that contains all the non-zero values.
     # All of this could be used to create the sparse matrix with all the info
     # about the optical system that we want.
+
+    # UPDATE: some of the code below was not efficient for making a CSR matrix.
+    # We would want to transpose some things to do that.
+
     metaman = load_metaman(psf_meta_path)
     h, weights = generate_unpadded(psfs_directory, metaman, img_dims, obj_dims)
 
@@ -286,8 +358,8 @@ def make_metamat(psfs_directory, psf_meta_path, img_dims, obj_dims):
     # reshape tries to change the last axis first, so we need to transpose the matrix
     # to put the x- and y- axes at the end and 
     kermat = h.transpose((2, 0, 1)) \
-    .reshape((h.shape[2], h.shape[0]*h.shape[1])) \
-    .transpose((1,0))
+    .reshape((h.shape[2], h.shape[0]*h.shape[1])) #\
+    #.transpose((1,0)) # don't want to transpose, because we want k by \beta matrix
 
     # the reshaped matrix of weights
     # the column is the pixel index, the row is the kernel index
@@ -296,7 +368,9 @@ def make_metamat(psfs_directory, psf_meta_path, img_dims, obj_dims):
 
     # compressed sparse row matrix version of kermat 
     # that we will henceforth use for multiplication
-    csr_kermat = scipy.sparse.csr_matrix(kermat)
+    #csr_kermat = scipy.sparse.csr_matrix(kermat)
+    # want a CSC for the kernel matrix, because now we're right-multiplying the weights vector for each pixel
+    csc_kermat = scipy.sparse.csc_matrix(kermat)
 
     # Mathematically, we could just matrix-multiply the two to get our mastermat:
     # mastermat = kermat*weightsmat
