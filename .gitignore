@@ -17,3 +17,6 @@ tensorflow/epochdata/*
 /data/multiWienerPSFStack_40z_aligned.mat
 /data/*
 /pytorch/2D deconvolution demo (pretrained).ipynb
+/common/col_inds.dat
+/common/row_inds.dat
+/common/values.dat
