@@ -532,8 +532,29 @@ def make_mastermat(psfs_directory, psf_meta_path, img_dims, obj_dims):
     #return scipy.sparse.csr_matrix(vals_final, (row_ind_final, col_ind_final))
     # since we appended ndarrays into lists, we should create an ndarray of the appropriate size from this
     # and then ravel this and use it to make our CSR matrix
-    row_ind_ndarray = np.ravel(np.asarray(row_ind_final))
-    col_ind_ndarray = np.ravel(np.asarray(col_ind_final))
-    vals_ndarray = np.ravel(np.asarray(vals_final))
-    return scipy.sparse.csr_matrix(vals_ndarray, (row_ind_ndarray, col_ind_ndarray))
+    #row_ind_ndarray = np.ravel(np.asarray(row_ind_final))
+    #col_ind_ndarray = np.ravel(np.asarray(col_ind_final))
+    #vals_ndarray = np.ravel(np.asarray(vals_final))
+    #return scipy.sparse.csr_matrix(vals_ndarray, (row_ind_ndarray, col_ind_ndarray))
 
+    # now, we want to produce a CSR from the massive returned COO matrix
+    # to do this: iterate through each possible image pixel index;
+    # create a mask that covers all entries with this value in row_inds;
+    # characterize the length of this mask; apply to col_inds, values
+    NNZ = (values!=0).shape[0] # the number of nonzero values
+
+    row_inds_csr = np.memmap('row_inds_csr.dat', mode='w+', shape=(img_dims[0]*img_dims[1]), dtype=np.uint64)
+    col_inds_csr = np.memmap('col_inds_csr.dat', mode='w+', shape=(NNZ*img_dims[0]*img_dims[1]), dtype=np.uint64)
+    values_csr = np.memmap('values_csr.dat', mode='w+', shape=(NNZ*img_dims[0]*img_dims[1]), dtype=np.float64)
+
+    to_csr_ind = 0
+
+    for pixel_ind in range(img_dims[0]*img_dims[1]):
+        mask = row_inds == pixel_ind
+        mask_size = np.count_nonzero(mask)
+        col_inds_csr[to_csr_ind:mask_size + to_csr_ind] = col_inds[mask]
+        values_csr[to_csr_ind:mask_size + to_csr_ind] = values[mask]
+        row_inds_csr[pixel_ind] = mask_size + to_csr_ind
+        to_csr_ind = to_csr_ind + mask_size
+
+    return row_inds_csr, col_inds_csr, values_csr
