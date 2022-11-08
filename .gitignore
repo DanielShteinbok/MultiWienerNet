@@ -20,3 +20,9 @@ tensorflow/epochdata/*
 /common/col_inds.dat
 /common/row_inds.dat
 /common/values.dat
+/common/row_inds_csr.dat
+/common/col_inds_csr.dat
+/common/values_csr.dat
+/common/row_inds_csr.npy
+/common/col_inds_csr.npy
+/common/values_csr.npy

@@ -117,6 +117,11 @@ def calc_svd(yi_reg,si,rnk,method='nearest'):
     # NOTE: any value of method except 'nearest' will lead to NaNs being inserted outside the 
     # convex hull of the points given in si. This will lead to lots of problems down the line.
     # An error of "lam value too large" produced by the poisson noise function could be due to these NaNs.
+    """
+    Parameters:
+        yi_reg: shape=(height, width, N) where N is the number of PSFs
+        si: dictionary of {field number: [x, y]}
+    """
     [Ny, Nx] = yi_reg[:,:,0].shape;
     print('creating matrix\n')
     Mgood = yi_reg.shape[2];
@@ -224,7 +229,7 @@ def calc_svd_shiftlist(yi_reg,si_list,rnk,method='nearest'):
     return np.flip(comps,-1), np.flip(weights_interp,-1)
 
 def calc_svd_indexed(yi_reg,si,index_table,rnk,method='nearest'):  
-    # NOTE: any velue of method except 'nearest' will lead to NaNs being inserted outside the 
+    # NOTE: any value of method except 'nearest' will lead to NaNs being inserted outside the 
     # convex hull of the points given in si. This will lead to lots of problems down the line.
     # An error of "lam value too large" produced by the poisson noise function could be due to these NaNs.
     # this is the same function as calc_svd, but allows us to pass a list of shifts directly
@@ -280,6 +285,10 @@ def calc_svd_indexed(yi_reg,si,index_table,rnk,method='nearest'):
     return np.flip(comps,-1), np.flip(weights_interp,-1)
 
 def calc_svd_indexed_sized(yi_reg,si,index_table,rnk, imgdims, method='nearest'):  
+    """
+    Parameters:
+        imgdims.shape = (height, width)
+    """
     # NOTE: any velue of method except 'nearest' will lead to NaNs being inserted outside the 
     # convex hull of the points given in si. This will lead to lots of problems down the line.
     # An error of "lam value too large" produced by the poisson noise function could be due to these NaNs.
@@ -288,6 +297,9 @@ def calc_svd_indexed_sized(yi_reg,si,index_table,rnk, imgdims, method='nearest')
     print('creating matrix\n')
     Mgood = yi_reg.shape[2];
     ymat = np.zeros((Ny*Nx,Mgood));
+    # NOTE this is where I suspect the problem of ordering happens
+    # the original order of the ymat SHOULD be kept; it's the product of the weights and h
+    # that matters at the end of the day, and that product should be the same
     ymat=yi_reg.reshape(( yi_reg.shape[0]* yi_reg.shape[1], yi_reg.shape[2]),order='F')
 
     print('done\n')
@@ -311,11 +323,11 @@ def calc_svd_indexed_sized(yi_reg,si,index_table,rnk, imgdims, method='nearest')
     # si_mat = reshape(cell2mat(si)',[2,Mgood]);
 #     xq = np.arange(-Nx/2,Nx/2);
 #     yq = np.arange(-Ny/2,Ny/2);
-    xq = np.arange(-imgdims[0]/2,imgdims[0]/2)
-    yq = np.arange(-imgdims[1]/2,imgdims[1]/2)
+    yq = np.arange(-imgdims[0]/2,imgdims[0]/2)
+    xq = np.arange(-imgdims[1]/2,imgdims[1]/2)
     [Xq, Yq] = np.meshgrid(xq,yq);
 
-    weights_interp = np.zeros((imgdims[1], imgdims[0],rnk));
+    weights_interp = np.zeros((imgdims[0], imgdims[1],rnk));
     xi=[]
     yi=[]
     # si_list passed directly as ordered list
