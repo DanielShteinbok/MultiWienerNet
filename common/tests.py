@@ -93,6 +93,13 @@ class CalcSVDTests(unittest.TestCase):
         #print(np.arange(urc.shape[0]*urc.shape[1]).reshape((urc.shape[0], urc.shape[1]))[urc != self.original_psfs[:,:,0]])
 
         np.testing.assert_allclose(urc, self.original_psfs[:,:,0], rtol=0.001, atol=1e-10)
+        
+
+class CircularShiftInterpolationTests(unittest.TestCase):
+    def test_returns_origins(self):
+        # TODO: assert that, if we give a small image such that our field_origins
+        # cover all points on the image
+
 
 # TODO: unit tests for mastermat_coo_logic
 # to verify that the shifting works as expected.

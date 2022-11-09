@@ -231,8 +231,11 @@ def interpolate_shifts(metaman, img_dims, obj_dims):
         y_shifts.append(shifts[key][1] + img_dims[0]/2)
         # origins can be 0 at center of image, because the meshgrids
         # range over (-dim/2, dim/2)
-        x_origin.append(origins[key][0])
-        y_origin.append(origins[key][1])
+        #x_origin.append(origins[key][0])
+        #y_origin.append(origins[key][1])
+        this_origin = find_pixel_on_obj(*(origins[key]), img_dims, obj_dims)
+        x_origin.append(this_origin[0])
+        y_origin.append(this_origin[1])
     
     # create the matrices for interpolation
     # may not need this, unlike the case for calc_svd
@@ -245,12 +248,12 @@ def interpolate_shifts(metaman, img_dims, obj_dims):
 
     # FIXME: nearest neighbor interpolation here causes bright spots
     x_int = scipy.interpolate.griddata((y_origin, x_origin), x_shifts, (Yq,Xq),method='cubic')
-    x_int_nearest = scipy.interpolate.griddata((y_origin, x_origin), x_shifts, (Yq,Xq),method='nearest')
-    x_int[np.isnan(x_int)] = x_int_nearest[np.isnan(x_int)]
+    #x_int_nearest = scipy.interpolate.griddata((y_origin, x_origin), x_shifts, (Yq,Xq),method='nearest')
+    #x_int[np.isnan(x_int)] = x_int_nearest[np.isnan(x_int)]
 
     y_int = scipy.interpolate.griddata((y_origin, x_origin), y_shifts, (Yq,Xq),method='cubic')
-    y_int_nearest = scipy.interpolate.griddata((y_origin, x_origin), y_shifts, (Yq,Xq),method='nearest')
-    y_int[np.isnan(y_int)] = y_int_nearest[np.isnan(y_int)]
+    #y_int_nearest = scipy.interpolate.griddata((y_origin, x_origin), y_shifts, (Yq,Xq),method='nearest')
+    #y_int[np.isnan(y_int)] = y_int_nearest[np.isnan(y_int)]
 
     # x_int and y_int are the interpolated shifts for each point in respectively the x-
     # and y- direction.
@@ -293,8 +296,11 @@ def interpolate_shifts_circular(metaman, img_dims, obj_dims):
         y_shifts.append(shifts[key][1] + img_dims[0]/2)
         # origins can be 0 at center of image, because the meshgrids
         # range over (-dim/2, dim/2)
-        x_origin.append(origins[key][0])
-        y_origin.append(origins[key][1])
+        #x_origin.append(origins[key][0])
+        #y_origin.append(origins[key][1])
+        this_origin = find_pixel_on_obj(*(origins[key]), img_dims, obj_dims)
+        x_origin.append(this_origin[0])
+        y_origin.append(this_origin[1])
 
     # complex number with x being the real component, which is converted to an angle
     origin_complex = np.asarray(x_origin) + 1j*np.asarray(y_origin)

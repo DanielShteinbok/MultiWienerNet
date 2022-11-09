@@ -114,10 +114,24 @@ def mastermat_coo_creation_logic_fast(csr_kermat, weightsmat, shifts, img_dims, 
     DO NOT USE YET
     """
     huge_mat = csr_kermat.dot(weightsmat)
-    huge_mat_csr = scipy.sparse.csr_matrix(huge_mat)
+    huge_mat_coo = scipy.sparse.coo_matrix(huge_mat)
     # TODO: could assign elements to COO column-by-column
     # could consider shifts through meshgrid
 
+    # TODO: perform shifts, assign to rows_disk and cols_disk
+    # First, want to identify clipped edges as before
+    #shift_selector = ((kernel_row_ind % ker_dims[1] + shifts[pixel_ind, 1] < img_dims[1]) # within right side
+    #    * (kernel_row_ind % ker_dims[1] + shifts[pixel_ind, 1] > 0) # within left side
+    #    * (kernel_row_ind // ker_dims[1] + shifts[pixel_ind, 0] < img_dims[0]) # above bottom
+    #    * (kernel_row_ind // ker_dims[1] + shifts[pixel_ind, 0] > 0) # below top
+    #    )
+
+    # shift selector should have the same dimensions as huge_mat_coo
+    # need to somehow get the x- and y- indices of the elements in huge_mat_coo in such a way that we can work
+    # with it conveniently with numpy
+    # Rather than going the meshgrid direction, we could just work with entries in huge_mat_coo.row and huge_mat_coo.col
+    # 
+    #selector = huge_mat_coo.row huge_mat_coo.col
 
 def make_mastermat_save(psfs_directory, psf_meta_path, img_dims, obj_dims, 
         savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy"), w_interp_method="nearest", s_interp_coords="cartesian"):
