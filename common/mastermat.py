@@ -1,6 +1,8 @@
 import one_shot_svd
 import numpy as np
 import scipy
+import scipy.sparse
+
 import load_PSFs
 import tempfile
 
@@ -24,9 +26,21 @@ def mastermat_coo_creation_logic(csr_kermat, weightsmat, shifts, img_dims, ker_d
     # diagonal shifting down and to the left from x-overflow
     #selector = [shifts >= 0 and shifts < (img_dims[0]+1)*img_dims[1]]
     #pixels_in_fov = weightsmat.swapaxes(0,1)[selector]
+    # shift to convert kernel space to image space
+    #convert_shift = np.ravel((np.ones((ker_dims[1], ker_dims[0]))*np.arange(ker_dims[0])*img_dims[1]).swapaxes(0,1))
+    # should be adding img_dims[1] - ker_dims[1] for each row, because otherwise convert_shift basically causes
+    # a lateral shift with each line
+    convert_shift = np.ravel((np.ones((ker_dims[1], ker_dims[0]))*np.arange(ker_dims[0])*(img_dims[1]-ker_dims[1])).swapaxes(0,1))
+
+    # simply skipping columns will lead to virtual zero-columns in the mastermat
+
+    # shifts is going to have, e.g. shape=(2,1024000)
+    not_nan_selector = (~np.isnan(shifts[:,0]))*(~np.isnan(shifts[:,1]))
+    relevant_pixels = np.arange(weightsmat.shape[1])[not_nan_selector]
 
     add_index = 0
-    for pixel_ind in range(weightsmat.shape[1]):
+    #for pixel_ind in range(weightsmat.shape[1]):
+    for pixel_ind in relevant_pixels:
         # a print statement to let us know where we are
         print("pixel_ind: ", pixel_ind)
         # the specific PFS vector produced by matrix muliplication of weights vector with
@@ -39,7 +53,10 @@ def mastermat_coo_creation_logic(csr_kermat, weightsmat, shifts, img_dims, ker_d
                 #- ker_dims[1]*(ker_dims[0]//2-1) - (ker_dims[1]//2 - 1) \
 
         # get the indices of all nonzero values in the out_col b-vector
-        kernel_row_ind = np.arange(out_col.shape[0]).reshape(out_col.shape[0],1)[out_col>quite_small]
+        #kernel_row_ind = np.arange(out_col.shape[0]).reshape(out_col.shape[0],1)[out_col>quite_small]
+        # make kernel_row_ind all indices, then select by value later
+        kernel_row_ind = np.arange(out_col.shape[0]).reshape(out_col.shape[0],1)
+        value_selector = (out_col > quite_small).reshape((out_col.shape[0],1))
 
         # select only those indices that don't get cut off the FOV
         #kernel_row_ind_keep = kernel_row_ind[\
@@ -49,11 +66,13 @@ def mastermat_coo_creation_logic(csr_kermat, weightsmat, shifts, img_dims, ker_d
                 #*(kernel_row_ind + tlcs > 0)]
 
         # select those indices that don't get clipped off, using the new approach:
-        selector = ((kernel_row_ind % ker_dims[1] + shifts[pixel_ind, 1] < img_dims[1]) # within right side
+        shift_selector = ((kernel_row_ind % ker_dims[1] + shifts[pixel_ind, 1] < img_dims[1]) # within right side
         * (kernel_row_ind % ker_dims[1] + shifts[pixel_ind, 1] > 0) # within left side
         * (kernel_row_ind // ker_dims[1] + shifts[pixel_ind, 0] < img_dims[0]) # above bottom
         * (kernel_row_ind // ker_dims[1] + shifts[pixel_ind, 0] > 0) # below top
         )
+
+        selector = shift_selector*value_selector
 
         kernel_row_ind_keep = kernel_row_ind[selector]
 
@@ -63,15 +82,13 @@ def mastermat_coo_creation_logic(csr_kermat, weightsmat, shifts, img_dims, ker_d
         # for the above-selected unclipped indices, select only the corresponding values
         values = out_col[kernel_row_ind_keep]
 
-        # shift to convert kernel space to image space
-        #convert_shift = np.ravel((np.ones((ker_dims[1], ker_dims[0]))*np.arange(ker_dims[0])*img_dims[1]).swapaxes(0,1))
-        # should be adding img_dims[1] - ker_dims[1] for each row, because otherwise convert_shift basically causes
-        # a lateral shift with each line
-        convert_shift = np.ravel((np.ones((ker_dims[1], ker_dims[0]))*np.arange(ker_dims[0])*(img_dims[1]-ker_dims[1])).swapaxes(0,1))
         # convert_shift excluding small values
-        wo_zero = convert_shift[out_col>quite_small]
+        #wo_zero = convert_shift[out_col>quite_small]
         # wo_zero excluding clipped
-        convert_keep = wo_zero[selector[:,0]]
+        #convert_keep = wo_zero[selector[:,0]]
+        #convert_keep = convert_shift[selector[:,0]]
+        convert_keep = convert_shift[kernel_row_ind_keep]
+
         # shift the the row indices as needed:
         img_row_ind = kernel_row_ind_keep + convert_keep + int(shifts[pixel_ind, 0])*img_dims[1] + shifts[pixel_ind,1]
 
@@ -88,17 +105,34 @@ def mastermat_coo_creation_logic(csr_kermat, weightsmat, shifts, img_dims, ker_d
         vals_disk.flush()
         add_index = add_index + img_row_ind.shape[0]
 
+def mastermat_coo_creation_logic_fast(csr_kermat, weightsmat, shifts, img_dims, ker_dims, rows_disk, cols_disk, vals_disk, quite_small=0.001):
+    """
+    A faster, but MUCH more memory-heavy approach to making the mastermat coo matrix.
+    the same parameters as mastermat_coo_creation_logic except huge_mat_disk
+    huge_mat_disk is a B-by-P matrix, where B is the number of pixels in the kernel and  P in the image.
+
+    DO NOT USE YET
+    """
+    huge_mat = csr_kermat.dot(weightsmat)
+    huge_mat_csr = scipy.sparse.csr_matrix(huge_mat)
+    # TODO: could assign elements to COO column-by-column
+    # could consider shifts through meshgrid
+
+
 def make_mastermat_save(psfs_directory, psf_meta_path, img_dims, obj_dims, 
-        savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy")):
+        savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy"), w_interp_method="nearest", s_interp_coords="cartesian"):
     """
     Complete process for making the mastermat and converting to CSR form,
     then saving as .npy to the given path.
     """
     metaman = load_PSFs.MetaMan(psf_meta_path)
-    h, weights = one_shot_svd.generate_unpadded(psfs_directory, metaman, img_dims, obj_dims)
+    h, weights = one_shot_svd.generate_unpadded(psfs_directory, metaman, img_dims, obj_dims, method=w_interp_method)
 
     # get the shifts to apply to each point
-    shifts = one_shot_svd.interpolate_shifts(metaman, img_dims, obj_dims)
+    if s_interp_coords=="cartesian":
+        shifts = one_shot_svd.interpolate_shifts(metaman, img_dims, obj_dims)
+    elif s_interp_coords=="circular":
+        shifts = one_shot_svd.interpolate_shifts_circular(metaman, img_dims, obj_dims)
 
     # the reshaped matrix of PSFs, where each column is a vectorized PSF
     #kermat = psfs.reshape((psfs.shape[0]*psfs.shape[1], psfs.shape[2]))
@@ -180,9 +214,7 @@ def simulate_image(img, csr_mastermat):
     img_vec = img.reshape((img.shape[0]*img.shape[1]))
     return csr_mastermat.dot(img_vec).reshape(img.shape)
 
-def load_csr_files(row_inds, col_inds, values, img_dims, csr_paths=('row_inds_csr.npy', 'col_inds_csr.npy', 'values_csr.npy')):
-    NNZ = values[values!=0].shape[0] # the number of nonzero values
-
+def load_csr_files(csr_paths=('row_inds_csr.npy', 'col_inds_csr.npy', 'values_csr.npy')):
     row_inds_csr = np.load(csr_paths[0])
     col_inds_csr = np.load(csr_paths[1])
     values_csr = np.load(csr_paths[2])

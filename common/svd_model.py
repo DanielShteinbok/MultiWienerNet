@@ -343,6 +343,8 @@ def calc_svd_indexed_sized(yi_reg,si,index_table,rnk, imgdims, method='nearest')
     #     weights_interp(:,:,r) = rot90(interpolant_r(Xq,Yq),2);
         # BELOW IS WRONG: should be (y,x) rather than (x,y)
         weights_interp[:,:,r]=griddata((xi,yi),weights[:,r],(Xq,Yq),method=method)
+        if method != "nearest":
+            weights_interp[:,:,r][np.isnan(weights_interp[:,:,r])] = griddata((xi,yi),weights[:,r],(Xq,Yq),method="nearest")[np.isnan(weights_interp[:,:,r])]
         #weights_interp[:,:,r]=griddata((yi,xi),weights[:,r],(Yq,Xq),method=method)
 
     print('done\n\n')

@@ -26,3 +26,4 @@ tensorflow/epochdata/*
 /common/row_inds_csr.npy
 /common/col_inds_csr.npy
 /common/values_csr.npy
+/common/*.npy

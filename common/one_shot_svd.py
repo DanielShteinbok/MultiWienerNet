@@ -124,7 +124,7 @@ def save_generated(h, weights, h_save_path, weights_save_path):
 
 
 #def generate_unpadded(psf_directory, psf_meta_path, img_dims, obj_dims):
-def generate_unpadded(psf_directory, metaman, img_dims, obj_dims):
+def generate_unpadded(psf_directory, metaman, img_dims, obj_dims, method="nearest"):
     """
     Generate unpadded eigen-PSFs, and weights for them covering the entire field
     Parameters:
@@ -157,7 +157,7 @@ def generate_unpadded(psf_directory, metaman, img_dims, obj_dims):
     rank = 28
     # BELOW is the problem: PSF-origins_pixel mismatch
     #comps, weights_interp=svm.calc_svd(psfs_ndarray,origins_pixel,rank)
-    comps, weights_interp=svm.calc_svd_indexed_sized(unpadded_psfs, origins_pixel, indices, rank, img_dims)
+    comps, weights_interp=svm.calc_svd_indexed_sized(unpadded_psfs, origins_pixel, indices, rank, img_dims, method=method)
     weights_norm = np.absolute(np.sum(weights_interp[weights_interp.shape[0]//2-1,weights_interp.shape[1]//2-1,:],0).max())
     weights = weights_interp/weights_norm;
 
@@ -242,6 +242,8 @@ def interpolate_shifts(metaman, img_dims, obj_dims):
     # perform the interpolations themselves
     # we want to do a cubic interpolation, but then want to replace
     # the regions outside the convex hull with nearest-neighbor interpolations.
+
+    # FIXME: nearest neighbor interpolation here causes bright spots
     x_int = scipy.interpolate.griddata((y_origin, x_origin), x_shifts, (Yq,Xq),method='cubic')
     x_int_nearest = scipy.interpolate.griddata((y_origin, x_origin), x_shifts, (Yq,Xq),method='nearest')
     x_int[np.isnan(x_int)] = x_int_nearest[np.isnan(x_int)]
@@ -264,6 +266,83 @@ def interpolate_shifts(metaman, img_dims, obj_dims):
     shifts_out[0,:,:] = y_int
     shifts_out[1,:,:] = x_int
     return shifts_out.reshape((2,img_dims[0]*img_dims[1])).swapaxes(0,1)
+
+def interpolate_shifts_circular(metaman, img_dims, obj_dims):
+    """
+    Like interpolate_shifts above, but considers the shifts in terms of circular cooridinates
+    and interpolates based on circular coordinates of position.
+    Where interpolate_shifts would lead to position-variant scaling,
+    this should lead to position-variant warping about the center.
+    """
+    xq = np.arange(-img_dims[1]/2,img_dims[1]/2);
+    yq = np.arange(-img_dims[0]/2,img_dims[0]/2);
+    [Xq, Yq] = np.meshgrid(xq,yq);
+
+    # create list of x-shifts, y_shifts, x_origin, y_origin
+    x_shifts = []
+    y_shifts = []
+    x_origin = []
+    y_origin = []
+    shifts = metaman.shifts
+    origins = metaman.field_origins
+    for key in shifts.keys():
+        #x_shifts.append(shifts[key][0])
+        # we need x_shifts and y_shifts to all be positive,
+        # to represent points on the image plane
+        x_shifts.append(shifts[key][0] + img_dims[1]/2)
+        y_shifts.append(shifts[key][1] + img_dims[0]/2)
+        # origins can be 0 at center of image, because the meshgrids
+        # range over (-dim/2, dim/2)
+        x_origin.append(origins[key][0])
+        y_origin.append(origins[key][1])
+
+    # complex number with x being the real component, which is converted to an angle
+    origin_complex = np.asarray(x_origin) + 1j*np.asarray(y_origin)
+    #r_origin = np.absolute(origin_complex)
+    #phi_origin = np.angle(origin_complex)
+    circle_origins = np.empty((origin_complex.shape[0], 2))
+    #circle_origins[:,0] is r, [:,1] is phi
+    circle_origins[:,0] = np.absolute(origin_complex)
+    circle_origins[:,1] = np.angle(origin_complex)
+
+    shift_complex = np.asarray(x_shifts) + 1j*np.asarray(y_shifts)
+    r_shift = np.absolute(shift_complex)
+    phi_shift = np.angle(shift_complex)
+    #circle_shifts = np.empty((shift_complex.shape[0], 2))
+    #circle_shifts[:,0] is r, [:,1] is phi
+    #circle_shifts[:,0] = np.absolute(shift_complex)
+    #circle_shifts[:,1] = np.angle(shift_complex)
+
+    # do the same with our meshgrid
+    # make a complex meshgrid representing coordinates:
+    mg_comp = Xq + 1j*Yq
+
+    # make the two respective meshgrids for r and phi
+    Rq = np.absolute(mg_comp)
+    Phiq = np.angle(mg_comp)
+
+    # do the shift interpolation:
+    r_int = scipy.interpolate.griddata(circle_origins, r_shift, (Rq, Phiq),method='cubic')
+    #r_int[np.isnan(r_int)] = 0
+    phi_int = scipy.interpolate.griddata(circle_origins, phi_shift, (Rq, Phiq),method='cubic')
+    #phi_int[np.isnan(phi_int)] = 0
+    # Will handle NaNs later--they should just carry through computation
+
+    # now that the radial and angular shifts have been interpolated,
+    # we want to turn these back into coordinate shifts so they're usable with everything else
+    #x_shift = np.cos(phi_int)*r_int
+    #y_shift = np.sin(phi_int)*r_int
+    #x_shift[np.isnan(x_shift)] = 0
+    #y_shift[np.isnan(y_shift)] = 0
+    # setting the shifts_out to zero at nan positions is useless because that would create a bright spot
+    # in the top left corner of the image.
+
+    shifts_out = np.zeros((2, img_dims[0], img_dims[1]))
+    shifts_out[0,:,:] = np.sin(phi_int)*r_int
+    shifts_out[1,:,:] = np.cos(phi_int)*r_int
+    # currently returning nans where they're clipped
+    return shifts_out.reshape((2,img_dims[0]*img_dims[1])).swapaxes(0,1)
+
 
 
 def mul_dense_sparse(dense_matrix, csc_matrix, shifts, img_dims, ker_dims, out_cols, out_rows, out_vals, quite_small = 0.001):
