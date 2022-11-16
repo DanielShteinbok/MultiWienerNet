@@ -19,3 +19,4 @@ tensorflow/epochdata/*
 /pytorch/2D deconvolution demo (pretrained).ipynb
 /common/*.npy
 /common/*.dat
+/common/*.swp
