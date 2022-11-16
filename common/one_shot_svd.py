@@ -143,6 +143,9 @@ def generate_unpadded(psf_directory, metaman, img_dims, obj_dims, method="neares
     #unpadded_psfs = np.transpose(np.flip(unpadded_psfs, (0,1)), axes=(1,0,2))
     unpadded_psfs = np.transpose(unpadded_psfs, axes=(1,0,2))
 
+    # added this line to deal with nan-filled PSFs produced by Zemax
+    unpadded_psfs[np.isnan(unpadded_psfs)] = 0
+
     # load the metaman:
     # for this function, we're just going to be passing the metaman directly in.
     # We want to have a high-level function that does things like instantiate it,
@@ -166,7 +169,8 @@ def generate_unpadded(psf_directory, metaman, img_dims, obj_dims, method="neares
 
     return h, weights
 
-def interpolate_shifts(metaman, img_dims, obj_dims):
+def interpolate_shifts(metaman, img_dims, obj_dims, method="cubic"):
+#def interpolate_shifts(metaman, img_dims, obj_dims):
     """
     Gets shifts from the metaman at the particular points of the field origins,
     and interpolates the shifts at all other points on the image based on that.
@@ -247,11 +251,13 @@ def interpolate_shifts(metaman, img_dims, obj_dims):
     # the regions outside the convex hull with nearest-neighbor interpolations.
 
     # FIXME: nearest neighbor interpolation here causes bright spots
-    x_int = scipy.interpolate.griddata((y_origin, x_origin), x_shifts, (Yq,Xq),method='cubic')
+    x_int = scipy.interpolate.griddata((y_origin, x_origin), x_shifts, (Yq,Xq),method=method)
+    #x_int = scipy.interpolate.griddata((y_origin, x_origin), x_shifts, (Yq,Xq),method='cubic')
     #x_int_nearest = scipy.interpolate.griddata((y_origin, x_origin), x_shifts, (Yq,Xq),method='nearest')
     #x_int[np.isnan(x_int)] = x_int_nearest[np.isnan(x_int)]
 
-    y_int = scipy.interpolate.griddata((y_origin, x_origin), y_shifts, (Yq,Xq),method='cubic')
+    #y_int = scipy.interpolate.griddata((y_origin, x_origin), y_shifts, (Yq,Xq),method='cubic')
+    y_int = scipy.interpolate.griddata((y_origin, x_origin), y_shifts, (Yq,Xq),method=method)
     #y_int_nearest = scipy.interpolate.griddata((y_origin, x_origin), y_shifts, (Yq,Xq),method='nearest')
     #y_int[np.isnan(y_int)] = y_int_nearest[np.isnan(y_int)]
 
