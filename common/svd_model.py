@@ -289,7 +289,7 @@ def calc_svd_indexed_sized(yi_reg,si,index_table,rnk, imgdims, method='nearest')
     Parameters:
         imgdims.shape = (height, width)
     """
-    # NOTE: any velue of method except 'nearest' will lead to NaNs being inserted outside the 
+    # NOTE: any value of method except 'nearest' will lead to NaNs being inserted outside the 
     # convex hull of the points given in si. This will lead to lots of problems down the line.
     # An error of "lam value too large" produced by the poisson noise function could be due to these NaNs.
     # this is the same function as calc_svd, but allows us to pass a list of shifts directly

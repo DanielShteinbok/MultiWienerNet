@@ -157,7 +157,8 @@ def generate_unpadded(psf_directory, metaman, img_dims, obj_dims, method="neares
     origins_pixel = {k: find_pixel_on_obj(*v, img_dims, obj_dims) for k, v in metaman.field_origins.items()}
 
     # perform the SVD and interpolate weights based on those pixel values that we calculated
-    rank = 28
+    #rank = 28
+    rank = unpadded_psfs.shape[2] - 1
     # BELOW is the problem: PSF-origins_pixel mismatch
     #comps, weights_interp=svm.calc_svd(psfs_ndarray,origins_pixel,rank)
     comps, weights_interp=svm.calc_svd_indexed_sized(unpadded_psfs, origins_pixel, indices, rank, img_dims, method=method)
@@ -168,6 +169,57 @@ def generate_unpadded(psf_directory, metaman, img_dims, obj_dims, method="neares
     h=comps/np.linalg.norm(np.ravel(comps))
 
     return h, weights
+
+#def generate_unpadded(psf_directory, psf_meta_path, img_dims, obj_dims):
+def generate_unpadded_nosvd_nonorm(psf_directory, metaman, img_dims, obj_dims, method="nearest"):
+    """
+    Generate unpadded eigen-PSFs, and weights for them covering the entire field
+    Parameters:
+        psf_directory: str, path to directory with the PSF CSV files therein
+        psf_meta_path: str, path to meta csv file which describes the locations and shifts of the PSFs
+        img_dims: (int height, int width), the dimensions of the sensor, in pixels
+        obj_dims: (int height, int width), the dimensions of the field of view, in microns
+    Returns:
+        h: the eigen-PSFs, shape = e.g. (32,32,28)
+        weights: the weights at each pixel of the image, shape = e.g. (800, 1280, 28)
+    """
+    # load the PSFs
+    unpadded_psfs, indices = csv_psfs.load_from_dir_index(psf_directory)
+
+    # flip and transpose PSFs to undo what Zemax does:
+    #unpadded_psfs = np.transpose(np.flip(unpadded_psfs, (0,1)), axes=(1,0,2))
+    unpadded_psfs = np.transpose(unpadded_psfs, axes=(1,0,2))
+
+    # added this line to deal with nan-filled PSFs produced by Zemax
+    unpadded_psfs[np.isnan(unpadded_psfs)] = 0
+
+    # load the metaman:
+    # for this function, we're just going to be passing the metaman directly in.
+    # We want to have a high-level function that does things like instantiate it,
+    # then call this function and others to orchestrate the "Mastermat" approach.
+    #metaman = load_PSFs.MetaMan(psf_meta_path)
+
+    # We're assuming that the pixel-dimensions of the object image will actually be the same as img_dims
+    #find_pixel_on_obj = lambda x,y: (int(x*img_dims[1]/obj_dims[1]), int(y*img_dims[0]/obj_dims[0]))
+    origins_pixel = {k: find_pixel_on_obj(*v, img_dims, obj_dims) for k, v in metaman.field_origins.items()}
+
+    # perform the SVD and interpolate weights based on those pixel values that we calculated
+    #rank = 28
+    rank = unpadded_psfs.shape[2] 
+    # BELOW is the problem: PSF-origins_pixel mismatch
+    #comps, weights_interp=svm.calc_svd(psfs_ndarray,origins_pixel,rank)
+    #comps, weights_interp=svm.calc_svd_indexed_sized(unpadded_psfs, origins_pixel, indices, rank, img_dims, method=method)
+    #weights_norm = np.absolute(np.sum(weights_interp[weights_interp.shape[0]//2-1,weights_interp.shape[1]//2-1,:],0).max())
+    #weights = weights_interp/weights_norm;
+
+    #normalize by norm of all stack. Can also try normalizing by max of all stack or by norm of each slice
+    #h=comps/np.linalg.norm(np.ravel(comps))
+    #h = psfs_ndarray
+    weights = np.eye(rank)
+    weights_interp = np.zeros((img_dims[0], img_dims[1],rank));
+
+    return h, weights
+
 
 def interpolate_shifts(metaman, img_dims, obj_dims, method="cubic"):
 #def interpolate_shifts(metaman, img_dims, obj_dims):

@@ -284,6 +284,7 @@ def mastermat_coo_creation_logic_homemade(csr_kermat, weightsmat, shifts, img_di
             continue
         # a print statement to let us know where we are
         print("pixel_ind: ", pixel_ind)
+        #print("add_index: ", add_index)
 
         # multiply the csr by appropriate column in weightsmat
         out_col = csr_mul_vec(csr_kermat, weightsmat[:,pixel_ind])
@@ -339,10 +340,25 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
     # TODO make it so, could use tempfile module, including tempfile.mkdtemp
 
     with tempfile.TemporaryDirectory() as name:
+        # really bad approach to take!
+        # Since I am pre-allocating memmaps below, I need to know what size to make them
+        # If I were doing this in C++, I'd just create an array of 1024000 pointers,
+        # and the array referenced by any of these pointers would be created to have
+        # just the right number of entries.
+        # Since I want to be able to move this to disk, I have to use memmaps
+        # numba doesn't know anything about memmaps--they don't work with numba
+        # consequently I can't dump to disk within my jit-ted method
+        # lol what are pointers
+        # so I'm just assuming that, on average, the number of elements in a column
+        # of my master matrix will be less than avg_nnz
+        # 100 works well for the nV3 without probes, but with probes our PSF is larger
+        # so need 500
+        avg_nnz = 500
+
         prefix = name + "/"
-        row_inds = np.memmap(prefix + 'row_inds_temp.dat', mode='w+', shape=(100*img_dims[0]*img_dims[1]), dtype=np.uint64)
-        col_inds = np.memmap(prefix + 'col_inds_temp.dat', mode='w+', shape=(100*img_dims[0]*img_dims[1]), dtype=np.uint64)
-        values = np.memmap(prefix + 'values_temp.dat', mode='w+', shape=(100*img_dims[0]*img_dims[1]), dtype=np.float64)
+        row_inds = np.memmap(prefix + 'row_inds_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.uint64)
+        col_inds = np.memmap(prefix + 'col_inds_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.uint64)
+        values = np.memmap(prefix + 'values_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.float64)
 
         #mastermat_coo_creation_logic(csr_kermat, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values)
         mastermat_coo_creation_logic_homemade(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values, quite_small=0.001)
