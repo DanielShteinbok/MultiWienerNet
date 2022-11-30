@@ -26,8 +26,11 @@ class MetaMan:
         shifts = {}
         for row in self.data:
             num = int(row["Field Number"])
-#             shifts[num] = [int(float(row["X image (px)"])), int(float(row["Y image (px)"]))]
-            shifts[num] = [-int(float(row["X image (px)"])), -int(float(row["Y image (px)"]))]
+            # undid artificial inversion
+            # besides, this inversion was wrong: it moved the PSF but did not invert it
+            # resulting in "pincoushiony" PSF variation over image instead of "barrelly"
+            shifts[num] = [int(float(row["X image (px)"])), int(float(row["Y image (px)"]))]
+            #shifts[num] = [-int(float(row["X image (px)"])), -int(float(row["Y image (px)"]))]
         return shifts
     
     @property
