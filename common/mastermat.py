@@ -255,9 +255,27 @@ def shift_PSF(psf_sparse, shift, img_dims, ker_dims, convert_shift):
 
     return unique_inds_stripped, vals_out_array
 
+@jit(nopython=True)
+def rotate_PSF(psf_vec, shift, ker_dims):
+    """
+    Rotate the PSF.
+    Should be done before shifting
+
+    Parameters:
+        psf_vec is the dense vector representation of the PSF at the point in question
+        shift: is in [y, x] and is an ndarray
+    """
+    unravelled_psf = np.empty((ker_dims[0], ker_dims[1], 1))
+    unravelled_psf[:,:,0] = psf_vec.reshape((ker_dims[0], ker_dims[1]))
+    shift_processed = np.empty((1,2)) # we need this to be 2D for rotate_unpadded_psfs
+    shift_processed[0,:] = np.flip(shift) # we want to reverse x and y, to get [x,y]
+    return np.ravel(
+                one_shot_svd.rotate_unpadded_psfs(
+                    unravelled_psf, shift_processed, reverse=True)
+                )
 
 @jit(nopython=True)
-def mastermat_coo_creation_logic_homemade(csr_kermat, weightsmat, shifts, img_dims, ker_dims, rows_disk, cols_disk, vals_disk, quite_small=0.001):
+def mastermat_coo_creation_logic_homemade(csr_kermat, weightsmat, shifts, img_dims, ker_dims, rows_disk, cols_disk, vals_disk, quite_small=0.001, rotate_psfs=False):
     """
     A numba-friendly alternative to the function above, using my self-rolled CSR multiplication
     csr_kermat is a 3-element tuple, where each element is an ndarray in the order of (row, col, values)
@@ -289,6 +307,12 @@ def mastermat_coo_creation_logic_homemade(csr_kermat, weightsmat, shifts, img_di
         # multiply the csr by appropriate column in weightsmat
         out_col = csr_mul_vec(csr_kermat, weightsmat[:,pixel_ind])
 
+        # NOTE: rotate the image here, while it is still dense
+        # use this only if already rotated in make_mastermat_save_homemade
+        if rotate_psfs:
+            # we are unrotating the PSF
+            out_col = rotate_PSF(out_col, shifts[pixel_ind, :], ker_dims)
+
         # grab only values of significant magnitude
         nz_vals = out_col[out_col > quite_small]
         nz_inds = np.arange(out_col.shape[0])[out_col > quite_small]
@@ -308,9 +332,16 @@ def mastermat_coo_creation_logic_homemade(csr_kermat, weightsmat, shifts, img_di
         add_index += shifted_inds.shape[0]
 
 def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_dims, 
-        savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy"), w_interp_method="nearest", s_interp_coords="cartesian"):
+        savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy"), w_interp_method="nearest", s_interp_coords="cartesian", rotate_psfs=False):
     metaman = load_PSFs.MetaMan(psf_meta_path)
-    h, weights = one_shot_svd.generate_unpadded(psfs_directory, metaman, img_dims, obj_dims, method=w_interp_method)
+    # TODO: replace generate_unpadded with one_shot_svd.generate_unpadded_rotated
+    if not rotate_psfs:
+        # normally, we just generate a regular unpadded PSF
+        h, weights = one_shot_svd.generate_unpadded(psfs_directory, metaman, img_dims, obj_dims, method=w_interp_method)
+    else:
+        # if rotate_psfs is True, then we want to first rotate them based on their origin positions, then perform the SVD
+        #since we rotated here, we need to unrotate in mastermat_coo_logic_homemade later
+        h, weights = one_shot_svd.generate_unpadded_rotated(psfs_directory, metaman, img_dims, obj_dims, method=w_interp_method)
 
     # get the shifts to apply to each point
     if s_interp_coords=="cartesian":
@@ -361,7 +392,7 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
         values = np.memmap(prefix + 'values_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.float64)
 
         #mastermat_coo_creation_logic(csr_kermat, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values)
-        mastermat_coo_creation_logic_homemade(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values, quite_small=0.001)
+        mastermat_coo_creation_logic_homemade(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values, quite_small=0.001, rotate_psfs=rotate_psfs)
         NNZ = values[values!=0].shape[0] # the number of nonzero values
 
         row_inds_csr = np.memmap(prefix + 'row_inds_temp_csr.dat', mode='w+', shape=(img_dims[0]*img_dims[1] + 1), dtype=np.uint64)

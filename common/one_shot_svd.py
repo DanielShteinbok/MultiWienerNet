@@ -2,6 +2,7 @@ import csv_psfs
 import svd_model as svm
 import numpy as np
 import scipy
+from numba import jit
 
 # from tensorflow directory
 import sys
@@ -169,6 +170,175 @@ def generate_unpadded(psf_directory, metaman, img_dims, obj_dims, method="neares
     h=comps/np.linalg.norm(np.ravel(comps))
 
     return h, weights
+
+@jit(nopython=True)
+def interp_grid(points, values):
+    """
+    linearly interpolate the values at points xi,
+    kind of similar to griddata.
+    However, points must be a 1D complex-valued array!
+    The real component represents x-value, the imaginary component represents y-value.
+    NOTE: the grid must be reularly-spaced and square.
+    returns the interpolated grid of values
+    """
+    # snap to top (bottom) left (right) corners by simply flooring or ceiling each of the components of the points values
+    # then multiply the values values by the magnitude of the difference between each point and the rounded corner coordinate
+    # then create a zeros ndarray and pointwise add each of these weighted things
+    # origin is not in center, since the indices were made from aranges
+    BL_coords = 
+    pass
+
+@jit(nopython=True)
+def rotate_unpadded_psfs(unpadded_psfs, origins_pixel, reverse=False):
+    """
+    Rotate the unpadded PSFs appropriately based on their location in the FOV,
+    resample to get the resulting 3D array with the first two axes in cartesian coordinates
+    but in rotated axes. Returned is sampled with same number of points as input.
+    Parameters:
+        unpadded_psfs: 3D ndarray where the first two axes are the cartesian axes, and the last
+            separates PSFs from one another
+        origins_pixel: ndarray of shape (m,2), where each row represents
+            the [x,y] coordinates of the center of the PSF in the FOV.
+            Must be already sorted to match the unpadded PSFs
+
+    Returns:
+        rotated_psfs: the PSFs, rotated and resampled and in polar coordinates
+
+    NOTE: resampling is done through cubic spline interpolation
+    """
+    # 1. create two meshgrids respectively for x- and y- indices of the PSF
+    #   Alternatively this can be just two 1D ndarrays that we use for the next step
+    # 2. create a complex-valued 2D ndarray by combining these
+    # 3. Use the complex-valued ndarray to make one 2D array for r and another for theta
+    # 4. Shift the angle of everything by just adding to the angular array elementwise
+    # 5. Now, instead of having indices on the range of (-pi, pi], you'll have (-pi+x, pi+x]
+    #       so if you want to convert to the former range, you'll have to
+    #       add 2*pi to everything less than -pi, and subtract 2*pi from everything exceeding pi
+    # You will want to perform step 5 because later you'll take for granted that the coordinates
+    # are the same across PSFs when you do the SVD
+
+    #FIXME: shift each of the x- and y- indices to make the origin the center of the image!!!
+
+
+    # Possibly an alternative to converting to angle and then shifting would be to
+    # pointwise-multiply the entire complex 2D array by an appropriate complex exponential
+    x_indices = np.arange(unpadded_psfs.shape[1])
+    # y_indices will be a column vector because that is necessary to make the a-la complex meshgrid below
+    y_indices = np.arange(unpadded_psfs.shape[0]).reshape((unpadded_psfs.shape[0], 1))
+
+    # complex representation of the x- and y-indices
+    #inds_complex = np.ones((unpadded_psfs.shape[0], unpadded_psfs.shape[1]))*x_indices + 1j*y_indices.transpose()
+    inds_complex = np.ones((unpadded_psfs.shape[0], unpadded_psfs.shape[1]))*x_indices + 1j*y_indices
+
+    # figure out the angles of the lines that pass through the optical axis and the center of each PSF in radians
+    # first, get the complex representation of the rearranged origins_pixel,
+    # then by Euler's formula we know:
+    # x + j*y = r*cos(theta) + j*r*sin(theta) = r*exp(j*theta)
+    # so we can just divide by the magnitude and then use this to pointwise-multiply the indices to shift them
+    #origins_complex = np.empty(len(indices))
+    #for i in range(len(indices)):
+        #origins_complex[i] = origins_pixel[indices[i]][0] + 1j*origins_pixel[indices[i]][1]
+
+    #origins_complex = np.empty(len(origins_pixel))
+    #for i in range(len(origins_pixel))
+        #origins_complex[i] = origins_pixel[i][0] + 1j*origins_pixel[i][1]
+    origins_complex = np.empty(origins_pixel.shape[0])
+    #origins_complex[:] = origins_pixel[:,0] + 1j*origins_pixel[:,1]
+    origins_complex = origins_pixel[:,0] + 1j*origins_pixel[:,1]
+    # shift the angles by multiplying these compex indices by a complex exponential
+    # see the whole thing above
+    # this is r*cos(theta) + j*r*sin(theta) = r*exp(j*theta) 
+    # so exp(j*theta) = (r*cos(theta) + j*r*sin(theta))/r = (x + jy)/r
+    shifted_inds_complex = np.empty((inds_complex.shape[0],inds_complex.shape[1], origins_complex.shape[0]), dtype=np.complex128)
+    
+    # create a rotator, which is a complex exponential by which we multiply our complex indices to rotate the image
+    # by Euler's formula we can consider the complex origin to be a phasor, so dividing by its magnitude
+    # gives a unit phasor. Multiplying by this unit phasor adds a phase.
+    rotator = origins_complex/np.absolute(origins_complex)
+
+    # bandaid solution to the problem of nan rotator at the center of the image
+    # there, we want no rotation: set rotator to 1
+    rotator[np.isnan(rotator)] = 1
+
+    if reverse:
+        # if we're going in the reverse direction, we need to subtract the angle
+        # this means we negate our exponent, which is equivalent to taking a reciprocal.
+        # this is an elementwise operation.
+        rotator = 1/rotator
+
+    for r in range(origins_complex.shape[0]):
+        shifted_inds_complex[:,:,r] = inds_complex*rotator[r]
+
+    # now, the indices we want to interpolate at are just the inds_complex that we started with
+    # griddata can only work with 2D arrays, so we'll need to use a dreaded for-loop through the third axis
+    rotated_unpadded_psfs = np.empty_like(unpadded_psfs)
+    # we have N PSFs, so for n in N
+    for n in range(unpadded_psfs.shape[2]):
+        # anchor points and indices must be ravelled
+        # format these things correctly
+        values = np.ravel(unpadded_psfs[:,:,n])
+        points_complex = np.ravel(shifted_inds_complex[:,:,n])
+        points_2d = np.empty((points_complex.shape[0], 2))
+        points_2d[:,1] = np.real(points_complex)
+        points_2d[:,0] = np.imag(points_complex)
+
+        # similarly, we want to format the locations at which we want to interpolate
+        interp_points_complex = np.ravel(inds_complex)
+        xi = np.empty((interp_points_complex.shape[0], 2))
+        xi[:,1] = np.real(interp_points_complex)
+        xi[:,0] = np.imag(interp_points_complex)
+        # points produced will be ravelled
+        # FIXME before interpolating, undo the shifting-to-the-origin that we did before, so that we are able to snap to coords
+        # in my version of the interpolation function.
+        ravelled_points = scipy.interpolate.griddata(points_2d, values, xi)
+        rotated_unpadded_psfs[:,:,n] = np.reshape(ravelled_points, rotated_unpadded_psfs[:,:,n].shape)
+
+    return rotated_unpadded_psfs
+
+def generate_unpadded_rotated(psf_directory, metaman, img_dims, obj_dims, method="nearest"):
+    """
+    A sort of copy of generate_unpadded, except that it first rotates the PSFs
+    """
+    # load the PSFs
+    unpadded_psfs, indices = csv_psfs.load_from_dir_index(psf_directory)
+
+    # flip and transpose PSFs to undo what Zemax does:
+    #unpadded_psfs = np.transpose(np.flip(unpadded_psfs, (0,1)), axes=(1,0,2))
+    unpadded_psfs = np.transpose(unpadded_psfs, axes=(1,0,2))
+
+    # added this line to deal with nan-filled PSFs produced by Zemax
+    unpadded_psfs[np.isnan(unpadded_psfs)] = 0
+
+    # load the metaman:
+    # for this function, we're just going to be passing the metaman directly in.
+    # We want to have a high-level function that does things like instantiate it,
+    # then call this function and others to orchestrate the "Mastermat" approach.
+    #metaman = load_PSFs.MetaMan(psf_meta_path)
+
+    # We're assuming that the pixel-dimensions of the object image will actually be the same as img_dims
+    #find_pixel_on_obj = lambda x,y: (int(x*img_dims[1]/obj_dims[1]), int(y*img_dims[0]/obj_dims[0]))
+    origins_pixel = {k: find_pixel_on_obj(*v, img_dims, obj_dims) for k, v in metaman.field_origins.items()}
+
+    origins_sorted = np.empty((len(indices),2))
+    for i in range(len(indices)):
+        origins_sorted[i, :] = np.asarray(origins_pixel[indices[i]])
+
+    rotated_psfs = rotate_unpadded_psfs(unpadded_psfs, origins_sorted)
+
+    # perform the SVD and interpolate weights based on those pixel values that we calculated
+    #rank = 28
+    rank = unpadded_psfs.shape[2] - 1
+    # BELOW is the problem: PSF-origins_pixel mismatch
+    #comps, weights_interp=svm.calc_svd(psfs_ndarray,origins_pixel,rank)
+    comps, weights_interp=svm.calc_svd_indexed_sized(rotated_psfs, origins_pixel, indices, rank, img_dims, method=method)
+    weights_norm = np.absolute(np.sum(weights_interp[weights_interp.shape[0]//2-1,weights_interp.shape[1]//2-1,:],0).max())
+    weights = weights_interp/weights_norm;
+
+    #normalize by norm of all stack. Can also try normalizing by max of all stack or by norm of each slice
+    h=comps/np.linalg.norm(np.ravel(comps))
+
+    return h, weights
+
 
 #def generate_unpadded(psf_directory, psf_meta_path, img_dims, obj_dims):
 def generate_unpadded_nosvd_nonorm(psf_directory, metaman, img_dims, obj_dims, method="nearest"):
