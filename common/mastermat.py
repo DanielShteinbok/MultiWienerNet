@@ -310,9 +310,9 @@ def mastermat_coo_creation_logic_homemade(csr_kermat, weightsmat, shifts, img_di
         # NOTE: rotate the image here, while it is still dense
         # use this only if already rotated in make_mastermat_save_homemade
         # commented out to make the mastermate code usable while that's under construction
-        #if rotate_psfs:
+        if rotate_psfs:
             # we are unrotating the PSF
-            #out_col = rotate_PSF(out_col, shifts[pixel_ind, :], ker_dims)
+            out_col = rotate_PSF(out_col, shifts[pixel_ind, :], ker_dims)
 
         # grab only values of significant magnitude
         nz_vals = out_col[out_col > quite_small]

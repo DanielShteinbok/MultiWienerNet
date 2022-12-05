@@ -181,25 +181,54 @@ def interp_grid(points, values, grid_dims=(32,32)):
     NOTE: the grid must be reularly-spaced and square.
     returns the interpolated grid of values
     """
-    # snap to top (bottom) left (right) corners by simply flooring or ceiling each of the components of the points values
-    # then multiply the values values by the magnitude of the difference between each point and the rounded corner coordinate
-    # then create a zeros ndarray and pointwise add each of these weighted things
-    # origin is not in center, since the indices were made from aranges
+    # triangulate each of the points we are interested in
+    # (find the nearest three points on the grid)
+    # and then do a linear barycentric interpolation
 
-    # these are meshgrid-like things that contain repeating indices as if for a ravelled array
-    # left is the set of x-indices for all the points immediately to the left of the given points
-    # top is the set of y-indices for all points immediately above the given points
-    left = np.floor(np.real(points))
-    top = np.floor(np.imag(points))
+    # First, the triangulation is done as follows:
+    # Round each of the real and imaginary components
+    # of points to the nearest whole, which will give us
+    # the coordinates of the nearest grid point.
+    # Then, take one step in each of x and y in the opposite direction of rounding
+    # to get the other two points.
 
-    # return a 2d grid
-    to_return = np.zeros(grid_dims)
-    # we want the Euclidean distance to each corner
-    to_return[top, left] += values*(np.absolute(points-left-1j*top - 1-1j)**2)
-    to_return[top, left+1] += values*(np.absolute(points-left-1j*top -1j))
-    to_return[top+1, left] += values*(np.absolute(points-left-1j*top -1)**2)
-    to_return[top+1, left+1] += values*(np.absolute(points-left-1j*top))
-    pass
+    # IMPLEMENTING:
+    # find nearest point:
+    # still just complex values
+    nearest_point = np.rint(points)
+
+    # find the direction from the nearest point to the point itself
+    # non-normalized direction:
+    non_normed = points - nearest_point
+    # should return ndarray where each element is one of (1 + 1j, 1 -1j, -1 + 1j, -1 -1j)
+    step_dir = np.real(non_normed)/np.absolute(np.real(non_normed)) +\
+            1j*np.imag(non_normed)/np.absolute(np.imag(non_normed))
+
+    # real(step_dir) = x_1 - x_3 = x_1 - x_2
+    # imag(step_dir) = y_2 - y_3 = y_2 - y_1
+    # performing the interpolation
+    grid = np.zeros(grid_dims)
+    w_xstep = (np.imag(step_dir)*np.real(non_normed))/(np.imag(step_dir)*np.real(step_dir))
+    w_ystep = np.real(step_dir)*np.imag(non_normed)/(np.imag(step_dir)*np.real(step_dir))
+    w_nearest = 1 - w_xstep - w_ystep
+
+    #grid[(np.imag(nearest_point)).astype(np.int64), (np.real(nearest_point + step_dir)).astype(np.int64)] \
+            #+= w_xstep*values
+    #grid[np.imag(nearest_point + step_dir).astype(np.int64), np.real(nearest_point).astype(np.int64)] \
+            #+= w_ystep*values
+    #grid[np.imag(nearest_point).astype(np.int64), np.real(nearest_point).astype(np.int64)] \
+            #+= w_nearest*values
+
+    # above code works fine, but numba can't handle it
+
+    for i in range(values.shape[0]):
+        grid[(np.imag(nearest_point)).astype(np.int64)[i], (np.real(nearest_point + step_dir)).astype(np.int64)[i]] \
+                += w_xstep[i]*values[i]
+        grid[np.imag(nearest_point + step_dir).astype(np.int64)[i], np.real(nearest_point).astype(np.int64)[i]] \
+                += w_ystep[i]*values[i]
+        grid[np.imag(nearest_point).astype(np.int64)[i], np.real(nearest_point).astype(np.int64)[i]] \
+                += w_nearest[i]*values[i]
+    return grid
 
 @jit(nopython=True)
 def rotate_unpadded_psfs(unpadded_psfs, origins_pixel, reverse=False):
@@ -297,8 +326,8 @@ def rotate_unpadded_psfs(unpadded_psfs, origins_pixel, reverse=False):
     inds_complex = inds_complex + x_indices_int[-1]/2 + 1j*y_indices_int[-1,0]/2
 
     # create the mask of points that are clipped (which fall beyond the square we are trying to sample in)
-    clipped_points = (np.real(shifted_inds_complex) < 0) | (np.real(shifted_inds_complex) > 32) | \
-        (np.imag(shifted_inds_complex) < 0) | (np.imag(shifted_inds_complex) > 32)
+    clipped_points = (np.real(shifted_inds_complex) < 0) | (np.real(shifted_inds_complex) > unpadded_psfs.shape[0]) | \
+        (np.imag(shifted_inds_complex) < 0) | (np.imag(shifted_inds_complex) > unpadded_psfs.shape[1])
 
     # we have N PSFs, so for n in N
     for n in range(unpadded_psfs.shape[2]):
@@ -308,15 +337,15 @@ def rotate_unpadded_psfs(unpadded_psfs, origins_pixel, reverse=False):
         # format these things correctly
         values = np.ravel(unpadded_psfs[:,:,n])[~ravelled_clipped_points]
         points_complex = np.ravel(shifted_inds_complex[:,:,n])[~ravelled_clipped_points]
-        points_2d = np.empty((points_complex.shape[0], 2))
-        points_2d[:,1] = np.real(points_complex)
-        points_2d[:,0] = np.imag(points_complex)
+        #points_2d = np.empty((points_complex.shape[0], 2))
+        #points_2d[:,1] = np.real(points_complex)
+        #points_2d[:,0] = np.imag(points_complex)
 
         # similarly, we want to format the locations at which we want to interpolate
         interp_points_complex = np.ravel(inds_complex)
-        xi = np.empty((interp_points_complex.shape[0], 2))
-        xi[:,1] = np.real(interp_points_complex)
-        xi[:,0] = np.imag(interp_points_complex)
+        #xi = np.empty((interp_points_complex.shape[0], 2))
+        #xi[:,1] = np.real(interp_points_complex)
+        #xi[:,0] = np.imag(interp_points_complex)
         # points produced will be ravelled
         # FIXME before interpolating, undo the shifting-to-the-origin that we did before, so that we are able to snap to coords
         # in my version of the interpolation function.
@@ -324,8 +353,8 @@ def rotate_unpadded_psfs(unpadded_psfs, origins_pixel, reverse=False):
         #ravelled_points = scipy.interpolate.griddata(points_2d, values, xi)
         # Below, stuff breaks. This is because we have less than 1024 points
         #rotated_unpadded_psfs[:,:,n] = np.reshape(ravelled_points, rotated_unpadded_psfs[:,:,n].shape)
-
-    #return rotated_unpadded_psfs
+        rotated_unpadded_psfs[:,:,n] = interp_grid(points_complex, values, grid_dims=unpadded_psfs[:,:,n].shape)
+    return rotated_unpadded_psfs
 
 def generate_unpadded_rotated(psf_directory, metaman, img_dims, obj_dims, method="nearest"):
     """
