@@ -201,8 +201,17 @@ def interp_grid(points, values, grid_dims=(32,32)):
     # non-normalized direction:
     non_normed = points - nearest_point
     # should return ndarray where each element is one of (1 + 1j, 1 -1j, -1 + 1j, -1 -1j)
-    step_dir = np.real(non_normed)/np.absolute(np.real(non_normed)) +\
-            1j*np.imag(non_normed)/np.absolute(np.imag(non_normed))
+    # we need to handle cases where the points neatly lie on the gridline
+    # for those cases, it doesn't matter where we step; we just need to choose a direction
+    # arbitrarily choose positive
+    step_dir = non_normed*1
+    step_dir[np.real(step_dir) == 0] += 1
+    step_dir[np.imag(step_dir) == 0] += 1j
+    #step_dir = np.real(non_normed)/np.absolute(np.real(non_normed)) +\
+            #1j*np.imag(non_normed)/np.absolute(np.imag(non_normed))
+    step_dir = np.real(step_dir)/np.absolute(np.real(step_dir)) +\
+            1j*np.imag(step_dir)/np.absolute(np.imag(step_dir))
+
 
     # real(step_dir) = x_1 - x_3 = x_1 - x_2
     # imag(step_dir) = y_2 - y_3 = y_2 - y_1
@@ -222,10 +231,14 @@ def interp_grid(points, values, grid_dims=(32,32)):
     # above code works fine, but numba can't handle it
 
     for i in range(values.shape[0]):
-        grid[(np.imag(nearest_point)).astype(np.int64)[i], (np.real(nearest_point + step_dir)).astype(np.int64)[i]] \
+        if np.real(non_normed[i]) != 0:
+            grid[(np.imag(nearest_point)).astype(np.int64)[i], (np.real(nearest_point + step_dir)).astype(np.int64)[i]] \
                 += w_xstep[i]*values[i]
-        grid[np.imag(nearest_point + step_dir).astype(np.int64)[i], np.real(nearest_point).astype(np.int64)[i]] \
+
+        if np.imag(non_normed[i]) != 0:
+            grid[np.imag(nearest_point + step_dir).astype(np.int64)[i], np.real(nearest_point).astype(np.int64)[i]] \
                 += w_ystep[i]*values[i]
+
         grid[np.imag(nearest_point).astype(np.int64)[i], np.real(nearest_point).astype(np.int64)[i]] \
                 += w_nearest[i]*values[i]
     return grid
@@ -295,18 +308,20 @@ def rotate_unpadded_psfs(unpadded_psfs, origins_pixel, reverse=False):
     origins_complex = origins_pixel[:,0] + 1j*origins_pixel[:,1]
     # shift the angles by multiplying these compex indices by a complex exponential
     # see the whole thing above
-    # this is r*cos(theta) + j*r*sin(theta) = r*exp(j*theta) 
+    # this is r*cos(theta) + j*r*sin(theta) = r*exp(j*theta)
     # so exp(j*theta) = (r*cos(theta) + j*r*sin(theta))/r = (x + jy)/r
     shifted_inds_complex = np.empty((inds_complex.shape[0],inds_complex.shape[1], origins_complex.shape[0]), dtype=np.complex128)
-    
+
     # create a rotator, which is a complex exponential by which we multiply our complex indices to rotate the image
     # by Euler's formula we can consider the complex origin to be a phasor, so dividing by its magnitude
     # gives a unit phasor. Multiplying by this unit phasor adds a phase.
-    rotator = origins_complex/np.absolute(origins_complex)
+    rotator = np.empty_like(origins_complex)
+    rotator[np.absolute(origins_complex) == 0] = 1
+    rotator[np.absolute(origins_complex)>0] = origins_complex[np.absolute(origins_complex)>0]/np.absolute(origins_complex[np.absolute(origins_complex)>0])
 
     # bandaid solution to the problem of nan rotator at the center of the image
     # there, we want no rotation: set rotator to 1
-    rotator[np.isnan(rotator)] = 1
+    #rotator[np.isnan(rotator)] = 1
 
     if reverse:
         # if we're going in the reverse direction, we need to subtract the angle
@@ -342,7 +357,7 @@ def rotate_unpadded_psfs(unpadded_psfs, origins_pixel, reverse=False):
         #points_2d[:,0] = np.imag(points_complex)
 
         # similarly, we want to format the locations at which we want to interpolate
-        interp_points_complex = np.ravel(inds_complex)
+        #interp_points_complex = np.ravel(inds_complex)
         #xi = np.empty((interp_points_complex.shape[0], 2))
         #xi[:,1] = np.real(interp_points_complex)
         #xi[:,0] = np.imag(interp_points_complex)
@@ -436,7 +451,7 @@ def generate_unpadded_nosvd_nonorm(psf_directory, metaman, img_dims, obj_dims, m
 
     # perform the SVD and interpolate weights based on those pixel values that we calculated
     #rank = 28
-    rank = unpadded_psfs.shape[2] 
+    rank = unpadded_psfs.shape[2]
     # BELOW is the problem: PSF-origins_pixel mismatch
     #comps, weights_interp=svm.calc_svd(psfs_ndarray,origins_pixel,rank)
     #comps, weights_interp=svm.calc_svd_indexed_sized(unpadded_psfs, origins_pixel, indices, rank, img_dims, method=method)
@@ -523,7 +538,7 @@ def interpolate_shifts(metaman, img_dims, obj_dims, method="cubic"):
         this_origin = find_pixel_on_obj(*(origins[key]), img_dims, obj_dims)
         x_origin.append(this_origin[0])
         y_origin.append(this_origin[1])
-    
+
     # create the matrices for interpolation
     # may not need this, unlike the case for calc_svd
     #x_shifts_int = np.zeros((img_dims[0], img_dims[1]))
@@ -682,27 +697,27 @@ def mul_dense_sparse(dense_matrix, csc_matrix, shifts, img_dims, ker_dims, out_c
     # (that is, irrelevant rows of dense_matrix)
     # by means of dense_matrix[shifts > 0 and shifts < img_dims[0]*img_dims[1]]
     dense_transpose = dense_matrix[shifts > 0 and shifts < img_dims[0]*img_dims[1]].swapaxes(0,1)
-    
+
     # iterate through columns of our csc_matrix
     for j in range(len(csc_matrix.indptr) -1):
-        
+
         # list of indices of nonzero values in the jth column of the sparse matrix
         jth_col_ind = csc_matrix.indices[csc_matrix.indptr[j]:csc_matrix.indptr[j+1]]
-        
+
         # Got rid of shifting at this stage entirely. Should have a different function that shifts the COO
-        
-        # FIXME: we shift it to the center, but we can't be specific about shifting yet 
+
+        # FIXME: we shift it to the center, but we can't be specific about shifting yet
         #col_ind_shifted = jth_col_ind \
                 #+ img_dims[1]*(img_dims[0]//2-1) + (img_dims[0]//2 - 1) \
                 #+ ker_dims[1]*(ker_dims[0]//2-1) + (ker_dims[0]//2 - 1) \
                 #+ shifts
 
-        # TODO: verify that this particular column is not irrelevant; 
+        # TODO: verify that this particular column is not irrelevant;
         # if it is irrelevant, continue
         # TODO: cut out parts that fall off along x-axis of image
-        #x_cut = col_ind_shifted % ker_dims[1] 
+        #x_cut = col_ind_shifted % ker_dims[1]
         #in_fov_selector = col_ind_shifted > 0 and col_ind_shifted < img_dims[0]*img_dims[1] # just cut out stuff falling off y-axis
-        #in_fov_selector = col_ind_shifted > 0 and col_ind_shifted < img_dims[0]*img_dims[1] and 
+        #in_fov_selector = col_ind_shifted > 0 and col_ind_shifted < img_dims[0]*img_dims[1] and
         #if not np.any(in_fov_selector):
             #continue
 
@@ -814,7 +829,7 @@ def make_mastermat(psfs_directory, psf_meta_path, img_dims, obj_dims):
     # Make this matrix sparse, because it may already make sense to do that
 
     # Iterate through each pixel, multiply the associated weight vector by the kernel matrix
-    # Get array of indices of resulting non-zero values, 
+    # Get array of indices of resulting non-zero values,
     # and another array of the values themselves by something like the following:
     # indices = arange[vec > 0.01]
     # values = vec[vec > 0.01]
@@ -824,7 +839,7 @@ def make_mastermat(psfs_directory, psf_meta_path, img_dims, obj_dims):
     # then append the elements of indices to a big_indices list
     # append the elements of values to a big_values list,
     # for i in range(len(values)) append pixel_index to cols_vec
-    
+
     # you end up with:
     # a cols_vec that contains the column in which each non-zero occurred;
     # an indices vector that contains the row in which each non-zero occurred;
@@ -844,7 +859,7 @@ def make_mastermat(psfs_directory, psf_meta_path, img_dims, obj_dims):
     # the reshaped matrix of PSFs, where each column is a vectorized PSF
     #kermat = psfs.reshape((psfs.shape[0]*psfs.shape[1], psfs.shape[2]))
     # reshape tries to change the last axis first, so we need to transpose the matrix
-    # to put the x- and y- axes at the end and 
+    # to put the x- and y- axes at the end and
     kermat = h.transpose((2, 0, 1)) \
     .reshape((h.shape[2], h.shape[0]*h.shape[1])) \
     .transpose((1,0)) # don't want to transpose, because we want k by \beta matrix
@@ -854,7 +869,7 @@ def make_mastermat(psfs_directory, psf_meta_path, img_dims, obj_dims):
     weightsmat = weights.transpose((2,0,1)) \
     .reshape((weights.shape[2], weights.shape[0]*weights.shape[1]))
 
-    # compressed sparse row matrix version of kermat 
+    # compressed sparse row matrix version of kermat
     # that we will henceforth use for multiplication
     csr_kermat = scipy.sparse.csr_matrix(kermat)
     # want a CSC for the kernel matrix, because now we're right-multiplying the weights vector for each pixel
@@ -867,7 +882,7 @@ def make_mastermat(psfs_directory, psf_meta_path, img_dims, obj_dims):
 
     # commented out below to prevent overwrites to good data
     mastermat_coo_creation_logic(csr_kermat, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values)
-    
+
     #######################################################################################################
     # FOR TESTING, END HERE################################################################################
     #######################################################################################################
@@ -879,7 +894,7 @@ def make_mastermat(psfs_directory, psf_meta_path, img_dims, obj_dims):
     # consequently, we will have to effectively iterate through each column of weightsmat
     # and do the matrix multiplication before extracting the info we want
     # and applying the shift.
-    
+
     # we need three lists from which to generate the output sparse matrix:
     # the list of column indices for the non-zero values;
     # the list of row indices for the non-zero values;
@@ -1038,7 +1053,7 @@ def make_mastermat_coo(psfs_directory, psf_meta_path, img_dims, obj_dims, memmap
     # the reshaped matrix of PSFs, where each column is a vectorized PSF
     #kermat = psfs.reshape((psfs.shape[0]*psfs.shape[1], psfs.shape[2]))
     # reshape tries to change the last axis first, so we need to transpose the matrix
-    # to put the x- and y- axes at the end and 
+    # to put the x- and y- axes at the end and
     kermat = h.transpose((2, 0, 1)) \
     .reshape((h.shape[2], h.shape[0]*h.shape[1])) \
     .transpose((1,0)) # don't want to transpose, because we want k by \beta matrix
@@ -1048,7 +1063,7 @@ def make_mastermat_coo(psfs_directory, psf_meta_path, img_dims, obj_dims, memmap
     weightsmat = weights.transpose((2,0,1)) \
     .reshape((weights.shape[2], weights.shape[0]*weights.shape[1]))
 
-    # compressed sparse row matrix version of kermat 
+    # compressed sparse row matrix version of kermat
     # that we will henceforth use for multiplication
     csr_kermat = scipy.sparse.csr_matrix(kermat)
     # want a CSC for the kernel matrix, because now we're right-multiplying the weights vector for each pixel

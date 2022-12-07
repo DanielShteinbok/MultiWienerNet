@@ -33,9 +33,9 @@ obj_dims = (640, 1024)
         #savepath = ("row_inds_curve_nearest_csr.npy", "col_inds_curve_nearest_csr.npy", "values_curve_nearest_csr.npy"), 
         #w_interp_method="nearest")
 
-#mastermat.make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_dims, 
-        #savepath = ("row_inds_curve_rot_csr.npy", "col_inds_curve_rot_csr.npy", "values_curve_rot_csr.npy"), 
-        #w_interp_method="cubic", rotate_psfs=True)
+mastermat.make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_dims, 
+        savepath = ("row_inds_curve_rot_csr.npy", "col_inds_curve_rot_csr.npy", "values_curve_rot_csr.npy"), 
+        w_interp_method="cubic", rotate_psfs=True)
 
 #mastermat.make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_dims, 
         #savepath = ("row_inds_diy_csr.npy", "col_inds_diy_csr.npy", "values_diy_csr.npy"), 
@@ -45,9 +45,9 @@ obj_dims = (640, 1024)
         #savepath = ("row_inds_hd_nearest_csr.npy", "col_inds_hd_nearest_csr.npy", "values_hd_nearest_csr.npy"), 
         #w_interp_method="nearest")
 
-mastermat.make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_dims, 
-        savepath = ("row_inds_hd_csr.npy", "col_inds_hd_csr.npy", "values_hd_csr.npy"), 
-        w_interp_method="cubic")
+#mastermat.make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_dims, 
+        #savepath = ("row_inds_hd_csr.npy", "col_inds_hd_csr.npy", "values_hd_csr.npy"), 
+        #w_interp_method="cubic")
 
 #mastermat.make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_dims, 
         #savepath = ("row_inds_fm3_csr.npy", "col_inds_fm3_csr.npy", "values_fm3_csr.npy"), 

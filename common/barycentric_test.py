@@ -8,8 +8,14 @@ values = np.arange(100)
 # generate the indices for these values
 # we shift them by 0.2 to the right and bottom
 [inds_x_shaped, inds_y_shaped] = np.meshgrid(np.arange(10), np.arange(10))
-inds_x = np.ravel(inds_x_shaped) + 11.2
-inds_y = np.ravel(inds_y_shaped) + 11.2
+#inds_x = np.ravel(inds_x_shaped) + 11.2
+#inds_y = np.ravel(inds_y_shaped) + 11.2
+
+#inds_x = np.ravel(inds_x_shaped) + 11
+#inds_y = np.ravel(inds_y_shaped) + 11
+
+inds_x = np.ravel(inds_x_shaped) + 22
+inds_y = np.ravel(inds_y_shaped) + 22
 
 # we need a (100, 2) ndarray for meshgrid
 points_2d = np.empty((inds_x.shape[0], 2))
