@@ -1,51 +1,6 @@
 # MultiWienerNet
 ## Deep learning for fast spatially-varying deconvolution 
 This is a modified clone of the project by the Waller Lab, find the original [here](https://github.com/Waller-Lab/MultiWienerNet).
-### Inscopix Instructions:
-connect to `lambda-quad` over ssh. Then, run:
-```
-curl https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o Miniconda3-latest-Linux-x86_64.sh
-bash Miniconda3-latest-Linux-x86_64.sh
-```
-
-You may then need to press `ENTER` a whole bunch of times, and type `yes` to agree to their terms.
-
-try running
-```shell
-conda
-```
-and if you get an error saying that the command isn't found, you may have to run
-```
-./miniconda3/bin/conda init
-```
-After this, you can close the terminal window, open a new one and ssh again as before.
-Now, if you run
-```bash
-conda
-```
-you should get the Anaconda usage instructions.
-
-Next, you want to create your environment. Run:
-```bash
-conda env create -f tensorflow/reproduce.yml
-conda activate tf2
-```
-Now, to start up a jupyter notebook, run:
-```bash
-jupyter-notebook --no-browser --port=8888
-```
-Copy the link is printed by jupyter (it should start as `https://localhost:8888`...)
-
-**NOTE:** if the number is not 8888 above, you should change the 8888 in the instructions below to match.
-
-Open up a new terminal window, and run:
-```shell
-ssh -L 8888:localhost:8888 <username>@<machine name>
-```
-and enter password etc. to connect and build an ssh tunnel. 
-
-Open up a browser on the host machine and paste in the URL you copied above.
-
 ### [Project Page](https://waller-lab.github.io/MultiWienerNet/) | [Paper](https://doi.org/10.1364/OPTICA.442438)
 
 ### Setup:
