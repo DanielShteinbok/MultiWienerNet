@@ -9,13 +9,13 @@ class MultiWienerDeconvolution(layers.Layer):
     Input: initial_psfs of shape (Y, X, C), initial_K has shape (1, 1, C) for each psf.
     """
     
-    def __init__(self, initial_psfs, initial_Ks):
+    def __init__(self, initial_psfs, initial_Ks, psfs_trainable=True, Ks_trainable=True):
         super(MultiWienerDeconvolution, self).__init__()
         initial_psfs = tf.dtypes.cast(initial_psfs, dtype=tf.float32)
         initial_Ks = tf.dtypes.cast(initial_Ks, dtype=tf.float32)
 
-        self.psfs = tf.Variable(initial_value=initial_psfs, trainable=True)
-        self.Ks = tf.Variable(initial_value=initial_Ks, constraint=tf.nn.relu, trainable=True) # K is constrained to be nonnegative
+        self.psfs = tf.Variable(initial_value=initial_psfs, trainable=psfs_trainable)
+        self.Ks = tf.Variable(initial_value=initial_Ks, constraint=tf.nn.relu, trainable=Ks_trainable) # K is constrained to be nonnegative
         
     def call(self, y):
         # Y preprocessing, Y is shape (N, H, W, C)

@@ -135,7 +135,10 @@ def UNet_multiwiener_resize(height, width, initial_psfs, initial_Ks,
                      encoding_cs=[24, 64, 128, 256, 512, 1024], 
                      center_cs=1024,
                      decoding_cs=[512, 256, 128, 64, 24, 24], 
-                     skip_connections=[True, True, True, True, True, True]):
+                     skip_connections=[True, True, True, True, True, True],
+                     psfs_trainable=True,
+                     Ks_trainable=True,
+                     training_noise=False):
     """
     Multiwiener UNet which doesn't require cropping.
     
@@ -168,8 +171,12 @@ def UNet_multiwiener_resize(height, width, initial_psfs, initial_Ks,
     
     x = inputs
     
+    # ADDED BY DANIEL: add Gaussian noise to images that matches the actual nV3 images
+    if training_noise:
+        x = tf.keras.layers.GaussianNoise(4.2)(x)
+    
     # Multi-Wiener deconvolutions
-    x = MultiWienerDeconvolution(initial_psfs, initial_Ks)(x)
+    x = MultiWienerDeconvolution(initial_psfs, initial_Ks, psfs_trainable=psfs_trainable, Ks_trainable=Ks_trainable)(x)
     
     skips = []
     

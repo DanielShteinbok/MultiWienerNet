@@ -53,8 +53,14 @@ class EpochLogger:
         try:
             self.epochlog = open(self.logpath, 'r+')
             self.num_epochs = int(self.epochlog.readline())
-        except FileNotFoundError:
-            os.makedirs(os.path.dirname(self.logpath))
+        except FileNotFoundError as e:
+            if str(e) == "[Errno 2] No such file or directory: '" + self.logpath + "'":
+                try:
+                    os.makedirs(os.path.dirname(self.logpath))
+                except:
+                    pass
+            else:
+                os.makedirs(os.path.dirname(self.logpath))
             self.epochlog = open(self.logpath, 'w+')
             self.num_epochs = 0
             self.epochlog.write('0')

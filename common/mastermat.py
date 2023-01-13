@@ -131,7 +131,7 @@ def csr_mul_vec(csr_mat, vec):
     for i in range(row_inds.shape[0]-1):
         out_vec[i] = np.sum(vals[row_inds[i]:row_inds[i+1]]*vec[col_inds[row_inds[i]:row_inds[i+1]]])
     return out_vec
-	
+
 @jit(nopython=True)
 def shift_PSF(psf_sparse, shift, img_dims, ker_dims, convert_shift):
     """
@@ -202,11 +202,11 @@ def shift_PSF(psf_sparse, shift, img_dims, ker_dims, convert_shift):
             bottom_coeff*left_coeff,
             bottom_coeff*right_coeff)
 
-    # if we can have the values in any order as long as they match indices, 
+    # if we can have the values in any order as long as they match indices,
     # we can just slap them together out-of-order.
     # But then we have to be careful how we apply the convert_shift
     # Alternatively, we can use the kernel_row_ind_keep to select from the get-go:
-    
+
     # in this interpolation, we create a superposition of the PSF shifted to each
     # of the 4 corners, weighted with the above coefficients
 
@@ -275,7 +275,7 @@ def rotate_PSF(psf_vec, shift, ker_dims):
                 )
 
 @jit(nopython=True)
-def mastermat_coo_creation_logic_homemade(csr_kermat, weightsmat, shifts, img_dims, ker_dims, rows_disk, cols_disk, vals_disk, quite_small=0.001, rotate_psfs=False):
+def mastermat_coo_creation_logic_homemade(csr_kermat, weightsmat, shifts, img_dims, ker_dims, rows_disk, cols_disk, vals_disk, quite_small=0.001, rotate_psfs=False, original_shift=False):
     """
     A numba-friendly alternative to the function above, using my self-rolled CSR multiplication
     csr_kermat is a 3-element tuple, where each element is an ndarray in the order of (row, col, values)
@@ -318,8 +318,12 @@ def mastermat_coo_creation_logic_homemade(csr_kermat, weightsmat, shifts, img_di
         nz_vals = out_col[out_col > quite_small]
         nz_inds = np.arange(out_col.shape[0])[out_col > quite_small]
 
+        if original_shift:
+            # simply shift the nz_inds to the original pixel index
+            shifted_inds, shifted_vals = shift_PSF((nz_inds, nz_vals), np.asarray([pixel_ind//img_dims[1], pixel_ind%img_dims[1]]), img_dims, ker_dims, convert_shift)
         # shift values (that is: shift and interpolate four surrounding corners)
-        shifted_inds, shifted_vals = shift_PSF((nz_inds, nz_vals), shifts[pixel_ind, :], img_dims, ker_dims, convert_shift)
+        else:
+            shifted_inds, shifted_vals = shift_PSF((nz_inds, nz_vals), shifts[pixel_ind, :], img_dims, ker_dims, convert_shift)
 
         rows_disk[add_index:shifted_inds.shape[0] + add_index] = shifted_inds[:] # row indices
         #out_array[1, add_index:img_row_ind.shape[0] + add_index] = pixel_ind*np.ones(img_row_ind.shape[0]) # column indices
@@ -332,8 +336,8 @@ def mastermat_coo_creation_logic_homemade(csr_kermat, weightsmat, shifts, img_di
         #vals_disk.flush()
         add_index += shifted_inds.shape[0]
 
-def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_dims, 
-        savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy"), w_interp_method="nearest", s_interp_coords="cartesian", rotate_psfs=False):
+def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_dims,
+        savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy"), w_interp_method="nearest", s_interp_coords="cartesian", rotate_psfs=False, avg_nnz=500, original_shift=False):
     metaman = load_PSFs.MetaMan(psf_meta_path)
     # TODO: replace generate_unpadded with one_shot_svd.generate_unpadded_rotated
     if not rotate_psfs:
@@ -353,7 +357,7 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
     # the reshaped matrix of PSFs, where each column is a vectorized PSF
     #kermat = psfs.reshape((psfs.shape[0]*psfs.shape[1], psfs.shape[2]))
     # reshape tries to change the last axis first, so we need to transpose the matrix
-    # to put the x- and y- axes at the end and 
+    # to put the x- and y- axes at the end and
     kermat = h.transpose((2, 0, 1)) \
     .reshape((h.shape[2], h.shape[0]*h.shape[1])) \
     .transpose((1,0)) # don't want to transpose, because we want k by \beta matrix
@@ -363,11 +367,11 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
     weightsmat = weights.transpose((2,0,1)) \
     .reshape((weights.shape[2], weights.shape[0]*weights.shape[1]))
 
-    # compressed sparse row matrix version of kermat 
+    # compressed sparse row matrix version of kermat
     # that we will henceforth use for multiplication
     csr_kermat = scipy.sparse.csr_matrix(kermat)
     kermat_tuple = (csr_kermat.indptr, csr_kermat.indices, csr_kermat.data)
-    
+
     # these files should be entirely temporary
     # TODO make it so, could use tempfile module, including tempfile.mkdtemp
 
@@ -385,7 +389,6 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
         # of my master matrix will be less than avg_nnz
         # 100 works well for the nV3 without probes, but with probes our PSF is larger
         # so need 500
-        avg_nnz = 500
 
         prefix = name + "/"
         row_inds = np.memmap(prefix + 'row_inds_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.uint64)
@@ -393,13 +396,13 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
         values = np.memmap(prefix + 'values_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.float64)
 
         #mastermat_coo_creation_logic(csr_kermat, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values)
-        mastermat_coo_creation_logic_homemade(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values, quite_small=0.001, rotate_psfs=rotate_psfs)
+        mastermat_coo_creation_logic_homemade(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values, quite_small=0.001, rotate_psfs=rotate_psfs, original_shift=original_shift)
         NNZ = values[values!=0].shape[0] # the number of nonzero values
 
         row_inds_csr = np.memmap(prefix + 'row_inds_temp_csr.dat', mode='w+', shape=(img_dims[0]*img_dims[1] + 1), dtype=np.uint64)
         col_inds_csr = np.memmap(prefix + 'col_inds_temp_csr.dat', mode='w+', shape=(NNZ), dtype=np.uint64)
         values_csr = np.memmap(prefix + 'values_temp_csr.dat', mode='w+', shape=(NNZ), dtype=np.float64)
-        
+
         row_inds_csr, col_inds_csr, values_csr = compute_csr(row_inds, col_inds, values)
 
         np.save(savepath[0], row_inds_csr)
@@ -408,7 +411,7 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
 
 
 
-def make_mastermat_save(psfs_directory, psf_meta_path, img_dims, obj_dims, 
+def make_mastermat_save(psfs_directory, psf_meta_path, img_dims, obj_dims,
         savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy"), w_interp_method="nearest", s_interp_coords="cartesian"):
     """
     Complete process for making the mastermat and converting to CSR form,
@@ -426,7 +429,7 @@ def make_mastermat_save(psfs_directory, psf_meta_path, img_dims, obj_dims,
     # the reshaped matrix of PSFs, where each column is a vectorized PSF
     #kermat = psfs.reshape((psfs.shape[0]*psfs.shape[1], psfs.shape[2]))
     # reshape tries to change the last axis first, so we need to transpose the matrix
-    # to put the x- and y- axes at the end and 
+    # to put the x- and y- axes at the end and
     kermat = h.transpose((2, 0, 1)) \
     .reshape((h.shape[2], h.shape[0]*h.shape[1])) \
     .transpose((1,0)) # don't want to transpose, because we want k by \beta matrix
@@ -436,10 +439,10 @@ def make_mastermat_save(psfs_directory, psf_meta_path, img_dims, obj_dims,
     weightsmat = weights.transpose((2,0,1)) \
     .reshape((weights.shape[2], weights.shape[0]*weights.shape[1]))
 
-    # compressed sparse row matrix version of kermat 
+    # compressed sparse row matrix version of kermat
     # that we will henceforth use for multiplication
     csr_kermat = scipy.sparse.csr_matrix(kermat)
-    
+
     # these files should be entirely temporary
     # TODO make it so, could use tempfile module, including tempfile.mkdtemp
 
@@ -456,7 +459,7 @@ def make_mastermat_save(psfs_directory, psf_meta_path, img_dims, obj_dims,
         row_inds_csr = np.memmap(prefix + 'row_inds_temp_csr.dat', mode='w+', shape=(img_dims[0]*img_dims[1] + 1), dtype=np.uint64)
         col_inds_csr = np.memmap(prefix + 'col_inds_temp_csr.dat', mode='w+', shape=(NNZ), dtype=np.uint64)
         values_csr = np.memmap(prefix + 'values_temp_csr.dat', mode='w+', shape=(NNZ), dtype=np.float64)
-        
+
         row_inds_csr, col_inds_csr, values_csr = compute_csr(row_inds, col_inds, values)
 
         np.save(savepath[0], row_inds_csr)
