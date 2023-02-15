@@ -130,6 +130,19 @@ def grad(model, myloss,inputs, targets):
         loss_value = myloss(model, inputs, targets)
     return loss_value, tape.gradient(loss_value, model.trainable_variables)
 
+def grad_universal(model, myloss,inputs, targets, *args, **kwargs):
+    """
+    added by Daniel. 
+    This is meant to be a more "universal" version of grad, 
+    which takes a list and dictionary of additional arguments to pass to myloss.
+    myloss must have the following signature:
+    
+    myloss(model, *args, **kwargs)
+    """
+    with tf.GradientTape() as tape:
+        loss_value = myloss(model, inputs, targets, *args, **kwargs)
+    return loss_value, tape.gradient(loss_value, model.trainable_variables)
+
 
 def SSIMLoss(y_true, y_pred):
     y_true = y_true[..., np.newaxis]
@@ -138,10 +151,23 @@ def SSIMLoss(y_true, y_pred):
     return 1 - tf.reduce_mean(tf.image.ssim(y_true, y_pred, 1.0))
 
 
-
 def SSIMLoss_l1(model,x,y_true):
     y_pred=model(x)
     y_pred = tf.expand_dims(y_pred, -1)
     loss_l1 = tf.reduce_mean(tf.abs(y_pred - y_true), axis=-1)
     loss_ssim=1.0 - tf.reduce_mean(tf.image.ssim(y_true, y_pred, 1.0))
+    return loss_l1+loss_ssim
+
+def SSIMLoss_l1_indicator(model,x,y_true,indicator, training=True):
+    """
+    same as SSIMLoss_l1(model, x, y_true), 
+    except here we take an indicator matrix and only evaluate within that indicator.
+    
+    indicator: a matrix broadcastable to model(x), e.g. with shape (800, 1280, 1)
+    """
+#     y_pred=model(x)
+    y_pred=model(x, training=training)
+    y_pred = tf.expand_dims(y_pred, -1)
+    loss_l1 = tf.reduce_mean(tf.abs(y_pred - y_true)*indicator, axis=-1)
+    loss_ssim=1.0 - tf.reduce_mean(tf.image.ssim(y_true*indicator, y_pred*indicator, 1.0))
     return loss_l1+loss_ssim

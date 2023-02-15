@@ -133,7 +133,7 @@ def csr_mul_vec(csr_mat, vec):
     return out_vec
 
 @jit(nopython=True)
-def shift_PSF(psf_sparse, shift, img_dims, ker_dims, convert_shift):
+def shift_PSF(psf_sparse, shift_center, img_dims, ker_dims, convert_shift):
     """
     shifts a sparse PSF by the given shift amount.
     Clips off the part that should fall off the image.
@@ -143,7 +143,7 @@ def shift_PSF(psf_sparse, shift, img_dims, ker_dims, convert_shift):
 
     Parameters:
         psf_sparse: tuple (indices, values) of the PSF
-        shift: tuple (y, x)
+        shift_center: tuple (y, x) of the location we want the CENTER of the PSF to end up
         img_dims: tuple (height, width)
         ker_dims: tuple (height, width)
         convert_shift: 1-D ndarray which could be pointwise added to a vectorized kernel
@@ -151,6 +151,8 @@ def shift_PSF(psf_sparse, shift, img_dims, ker_dims, convert_shift):
     """
     kernel_row_ind = psf_sparse[0]
     out_col = psf_sparse[1]
+
+    shift = shift_center - np.asarray((ker_dims[0]/2, ker_dims[1]/2))
 
     # Had a problem with that things kind of overflowed because we are selecting by top left
     # and then potentially shifting out--be stricter by one at right and bottom

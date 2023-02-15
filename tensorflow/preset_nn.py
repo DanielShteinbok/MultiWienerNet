@@ -8,7 +8,7 @@
 import numpy as np
 import models.model_2d as mod
 
-def instant_multiwienernet(psfs_shape=(800,1280,21)):
+def instant_multiwienernet(psfs_shape=(800,1280,21), pooling='average'):
     psfs = np.empty(psfs_shape)
     Ks =np.empty((1,1,psfs.shape[2]))
     model =mod.UNet_multiwiener_resize(psfs_shape[0], psfs_shape[1], psfs, Ks, 
@@ -16,5 +16,6 @@ def instant_multiwienernet(psfs_shape=(800,1280,21)):
              center_cs=1024,
              decoding_cs=[512, 256, 128, 64, 24, 24],
              skip_connections=[True, True, True, True, True, False], psfs_trainable=True,
-                training_noise=True)
+                training_noise=True,
+              pooling=pooling)
     return model

@@ -1,6 +1,9 @@
 import tensorflow as tf
 from tensorflow.keras import layers
 from models.layers import *
+import sys
+sys.path.append("/home/dshteinbok/blur-pool-keras/")
+import blurpool
 
 def conv2d_block(x, filters, kernel_size, padding='same', dilation_rate=1, batch_norm=True, activation='relu'):
     """
@@ -30,6 +33,28 @@ def encoder_block(x, filters, kernel_size, padding='same', dilation_rate=1, pool
         x = layers.MaxPooling2D(pool_size=(2, 2))(x)
     elif pooling == 'average':
         x = layers.AveragePooling2D(pool_size=(2, 2))(x)
+    else:
+        assert False, 'Pooling layer {} not implemented'.format(pooling)
+    
+    return x, x_skip
+
+def encoder_block_blur(x, filters, kernel_size, padding='same', dilation_rate=1, pooling='max', **kwargs):
+    """
+    Encoder block used in contracting path of UNet.
+    """
+    # EXAMINE: line below is repeated twice? Is this a mistake?
+    x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
+    x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
+    x_skip = x
+#     print(x.shape)
+    if pooling == 'max':
+        x = layers.MaxPooling2D(pool_size=(2, 2))(x)
+    elif pooling == 'average':
+        x = layers.AveragePooling2D(pool_size=(2, 2))(x)
+    elif pooling == 'maxblur':
+        x = blurpool.MaxBlurPooling2D(**kwargs)(x)
+    elif pooling == 'averageblur':
+        x = blurpool.AverageBlurPooling2D(**kwargs)(x)
     else:
         assert False, 'Pooling layer {} not implemented'.format(pooling)
     
@@ -138,7 +163,9 @@ def UNet_multiwiener_resize(height, width, initial_psfs, initial_Ks,
                      skip_connections=[True, True, True, True, True, True],
                      psfs_trainable=True,
                      Ks_trainable=True,
-                     training_noise=False):
+                     training_noise=False,
+                     training_noise_sigma=4.2,
+                     pooling='average'):
     """
     Multiwiener UNet which doesn't require cropping.
     
@@ -173,7 +200,7 @@ def UNet_multiwiener_resize(height, width, initial_psfs, initial_Ks,
     
     # ADDED BY DANIEL: add Gaussian noise to images that matches the actual nV3 images
     if training_noise:
-        x = tf.keras.layers.GaussianNoise(4.2)(x)
+        x = tf.keras.layers.GaussianNoise(training_noise_sigma)(x)
     
     # Multi-Wiener deconvolutions
     x = MultiWienerDeconvolution(initial_psfs, initial_Ks, psfs_trainable=psfs_trainable, Ks_trainable=Ks_trainable)(x)
@@ -182,7 +209,8 @@ def UNet_multiwiener_resize(height, width, initial_psfs, initial_Ks,
     
     # Contracting path
     for c in encoding_cs:
-        x, x_skip = encoder_block(x, c, kernel_size=3, padding='same', dilation_rate=1, pooling='average')
+#         x, x_skip = encoder_block(x, c, kernel_size=3, padding='same', dilation_rate=1, pooling='average')
+        x, x_skip = encoder_block_blur(x, c, kernel_size=3, padding='same', dilation_rate=1, pooling=pooling)
         skips.append(x_skip)
 
     skips = list(reversed(skips))
