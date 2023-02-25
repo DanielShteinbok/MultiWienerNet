@@ -171,3 +171,80 @@ def SSIMLoss_l1_indicator(model,x,y_true,indicator, training=True):
     loss_l1 = tf.reduce_mean(tf.abs(y_pred - y_true)*indicator, axis=-1)
     loss_ssim=1.0 - tf.reduce_mean(tf.image.ssim(y_true*indicator, y_pred*indicator, 1.0))
     return loss_l1+loss_ssim
+
+def SSIMLoss_l1_generator(training=True):
+    """
+    return a callback function that takes:
+    callback(y_true, y_pred)
+    """
+#     y_pred=model(x)
+    def loss_func(y_true, y_pred):
+#     y_pred=model(x, training=training)
+        print("y_true.shape: ", str(y_true.shape))
+        print("y_pred.shape: ", str(y_pred.shape))
+#         y_pred = tf.expand_dims(y_pred, -1)
+        loss_l1 = tf.reduce_mean(tf.abs(y_pred - y_true), axis=-1)
+#         if y_true.shape[1] is None:
+#             print("reshaping y_true")
+#             y_true += np.zeros_like(y_pred.shape)
+        loss_ssim=1.0 - tf.reduce_mean(tf.image.ssim(y_true, y_pred, 1.0))
+#         loss_ssim=1.0 - tf.reduce_mean(tf.image.ssim(tf.multiply(y_true, indicator), tf.multiply(y_pred, indicator), 1.0))
+        return loss_l1+loss_ssim
+    return loss_func
+
+def SSIMLoss_l1_indicator_generator(indicator, training=True):
+    """
+    return a callback function that takes:
+    callback(y_true, y_pred)
+    """
+#     y_pred=model(x)
+    def loss_func(y_true, y_pred):
+#     y_pred=model(x, training=training)
+        print("y_true.shape: ", str(y_true.shape))
+        print("y_pred.shape: ", str(y_pred.shape))
+#         y_pred = tf.expand_dims(y_pred, -1)
+        loss_l1 = tf.reduce_mean(tf.abs(y_pred - y_true)*indicator, axis=-1)
+    
+        # evil hack to allow the model to compile. At that point y_true has dimensions (None, None, None, None)
+        # and so the compilation fails because SSIM fails given dimensions less than 11x11
+        # there are working examples using ssim successfully without this hack, 
+        # but I suspect they don't have the (None, None, None, None) problem because this is caused by the multiwiener layer
+        if y_true.shape[1] is not None:
+            loss_ssim=1.0 - tf.reduce_mean(tf.image.ssim(y_true*indicator, y_pred*indicator, 1.0))
+        else:
+            loss_ssim=0.0
+            print("y_true.shape[1] is None")
+#         loss_ssim=1.0 - tf.reduce_mean(tf.image.ssim(tf.multiply(y_true, indicator), tf.multiply(y_pred, indicator), 1.0))
+        return loss_l1+loss_ssim
+    return loss_func
+
+def Loss_l1_indicator_generator(indicator, training=True):
+    """
+    return a callback function that takes:
+    callback(y_true, y_pred)
+    """
+#     y_pred=model(x)
+    def loss_func(y_true, y_pred):
+#     y_pred=model(x, training=training)
+        print("y_true.shape: ", str(y_true.shape))
+        print("y_pred.shape: ", str(y_pred.shape))
+#         y_pred = tf.expand_dims(y_pred, -1)
+        loss_l1 = tf.reduce_mean(tf.abs(y_pred - y_true)*indicator, axis=-1)
+#         if y_true.shape[1] is None:
+#             print("reshaping y_true")
+#             y_true += np.zeros_like(y_pred.shape)
+#         loss_ssim=1.0 - tf.reduce_mean(tf.image.ssim(y_true*indicator, y_pred*indicator, 1.0))
+#         loss_ssim=1.0 - tf.reduce_mean(tf.image.ssim(tf.multiply(y_true, indicator), tf.multiply(y_pred, indicator), 1.0))
+        return loss_l1
+    return loss_func
+
+class SSIMLoss_l1_indicator_Class(tf.keras.losses.Loss):
+    def __init__(self, indicator, name="SSIM_and_1_norm"):
+        super().__init__(name=name)
+        self.indicator = indicator
+        
+    def call(self, y_true, y_pred):
+        y_pred = tf.expand_dims(y_pred, -1)
+        loss_l1 = tf.reduce_mean(tf.abs(y_pred - y_true)*self.indicator, axis=-1)
+        loss_ssim=1.0 - tf.reduce_mean(tf.image.ssim(y_true*self.indicator, y_pred*self.indicator, 1.0))
+        return loss_l1+loss_ssim
