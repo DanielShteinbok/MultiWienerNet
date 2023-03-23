@@ -8,6 +8,9 @@
 import numpy as np
 import models.model_2d as mod
 
+# import os
+# os.environ["CUDA_VISIBLE_DEVICES"]="1" 
+
 def instant_multiwienernet(psfs_shape=(800,1280,21), pooling='average'):
     psfs = np.empty(psfs_shape)
     Ks =np.empty((1,1,psfs.shape[2]))

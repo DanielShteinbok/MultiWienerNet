@@ -19,6 +19,20 @@ def conv2d_block(x, filters, kernel_size, padding='same', dilation_rate=1, batch
     
     return x
 
+def deconv2d_block(x, filters, kernel_size, padding='same', dilation_rate=1, batch_norm=True, activation='relu'):
+    """
+    Applies Conv2DTranspose - BN - ReLU block.
+    """
+    x = layers.Conv2DTranspose(filters, kernel_size, padding=padding, use_bias=False)(x)
+    
+    if batch_norm:
+        x = layers.BatchNormalization()(x)
+
+    if activation is not None:
+        x = layers.Activation(activation)(x)
+    
+    return x
+
 
 def encoder_block(x, filters, kernel_size, padding='same', dilation_rate=1, pooling='max'):
     """
@@ -60,7 +74,6 @@ def encoder_block_blur(x, filters, kernel_size, padding='same', dilation_rate=1,
     
     return x, x_skip
 
-
 def decoder_block(x, x_skip, filters, kernel_size, padding='same', dilation_rate=1):
     """
     Decoder block used in expansive path of UNet.
@@ -81,6 +94,34 @@ def decoder_block(x, x_skip, filters, kernel_size, padding='same', dilation_rate
 
     # EXAMINE: line below is repeated THRICE? Is this a mistake???
     x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
+    x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
+    x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
+    
+    return x
+
+def decoder_block_transposed(x, x_skip, filters, kernel_size, padding='same', dilation_rate=1):
+    """
+    Decoder block used in expansive path of UNet.
+    """
+#     x = layers.UpSampling2D(size=(2, 2), interpolation='nearest')(x)
+    # filters is supposed to match the number of channels that we want out of the upsampling/whatever
+    # I guess this should replace one of the convolutional blocks below
+    x = layers.Conv2DTranspose(filters, kernel_size, strides=(2,2)) 
+    
+    # Calculate cropping for down_tensor to concatenate with x
+    
+    if x_skip is not None:
+        _, h2, w2, _ = x_skip.shape
+        _, h1, w1, _ = x.shape
+        h_diff, w_diff = h2 - h1, w2 - w1
+
+        cropping = ((int(np.ceil(h_diff / 2)), int(np.floor(h_diff / 2))),
+                    (int(np.ceil(w_diff / 2)), int(np.floor(w_diff / 2))))
+        x_skip = layers.Cropping2D(cropping=cropping)(x_skip)
+        x = layers.concatenate([x, x_skip], axis=3)
+
+    # EXAMINE: line below is repeated THRICE? Is this a mistake???
+#     x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
     x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
     x = conv2d_block(x, filters, kernel_size, padding, dilation_rate, batch_norm=True, activation='relu')
     
