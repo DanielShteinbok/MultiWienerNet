@@ -1,4 +1,4 @@
-name: tf2
+name: tf
 channels:
   - conda-forge
   - defaults
@@ -193,6 +193,8 @@ dependencies:
   - zeromq=4.3.4=h2531618_0
   - zlib=1.2.12=h5eee18b_3
   - zstd=1.5.2=ha4553b6_0
+  - pip==22.2.2
+  - pip-autoremove==0.10.0
   - pip:
     - absl-py==1.2.0
     - astunparse==1.6.3
@@ -217,8 +219,8 @@ dependencies:
     - numpy==1.23.3
     - oauthlib==3.2.1
     - opt-einsum==3.3.0
-    - pip==22.2.2
-    - pip-autoremove==0.10.0
+      #    - pip==22.2.2
+      #- pip-autoremove==0.10.0
     - protobuf==3.19.5
     - pyasn1==0.4.8
     - pyasn1-modules==0.2.8
@@ -236,4 +238,7 @@ dependencies:
     - werkzeug==2.2.2
     - wrapt==1.14.1
     - zipp==3.8.1
+      # added manually
+    - blurpool
+    - bm3d
 prefix: /home/dshteinbok/miniconda3/envs/tf
