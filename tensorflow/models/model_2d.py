@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.keras import layers
 from models.layers import *
 import sys
-sys.path.append("/home/dshteinbok/blur-pool-keras/")
+# sys.path.append("/home/dshteinbok/blur-pool-keras/")
 import blurpool
 
 def conv2d_block(x, filters, kernel_size, padding='same', dilation_rate=1, batch_norm=True, activation='relu'):
