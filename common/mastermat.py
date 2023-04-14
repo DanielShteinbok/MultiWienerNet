@@ -133,6 +133,7 @@ def csr_mul_vec(csr_mat, vec):
     return out_vec
 
 @jit(nopython=True)
+#@jit(debug=True)
 def shift_PSF(psf_sparse, shift_center, img_dims, ker_dims, convert_shift):
     """
     shifts a sparse PSF by the given shift amount.
@@ -277,6 +278,7 @@ def rotate_PSF(psf_vec, shift, ker_dims):
                 )
 
 @jit(nopython=True)
+#@jit(debug=True)
 def mastermat_coo_creation_logic_homemade(csr_kermat, weightsmat, shifts, img_dims, ker_dims, rows_disk, cols_disk, vals_disk, quite_small=0.001, rotate_psfs=False, original_shift=False):
     """
     A numba-friendly alternative to the function above, using my self-rolled CSR multiplication
