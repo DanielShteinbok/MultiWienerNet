@@ -278,7 +278,6 @@ def rotate_PSF(psf_vec, shift, ker_dims):
                 )
 
 @jit(nopython=True)
-#@jit(debug=True)
 def mastermat_coo_creation_logic_homemade(csr_kermat, weightsmat, shifts, img_dims, ker_dims, rows_disk, cols_disk, vals_disk, quite_small=0.001, rotate_psfs=False, original_shift=False):
     """
     A numba-friendly alternative to the function above, using my self-rolled CSR multiplication
@@ -340,6 +339,130 @@ def mastermat_coo_creation_logic_homemade(csr_kermat, weightsmat, shifts, img_di
         #vals_disk.flush()
         add_index += shifted_inds.shape[0]
 
+@jit(nopython=True)
+#@jit(debug=True)
+def mastermat_coo_creation_logic_homemade_indexed(csr_kermat, weightsmat, shifts, img_dims, ker_dims,
+                                                  rows_disk, cols_disk, vals_disk,
+                                                  quite_small=0.001, rotate_psfs=False, original_shift=False, start_pixel=0, start_index=0, chunksize=0):
+    """
+    This function should be called from a wrapper that keeps track of how far we got last time in computing the master matrix.
+    This allows you to stop somewhere, and pick up where you left off. For instance, you may want to flush the data to disk and clear memory.
+
+    This function is like what we have above, but there are extra parameters that allow you to start calculating the master matrix from wherever you left off.
+    Returns add_index, which is the index in the COO arrays from which you should start writing.
+
+    start_pixel tells you which weight you should start with,
+    start_index is the index you should start writing at in your COO matrix.
+    chunksize is how many pixels to processs. If chunksize < 1, proces the entire weights matrix to the end.
+
+    start_index could be the value returned by the last call's return.
+
+    weightsmat should be
+    """
+    # Sketch of solution:
+    # iterate through pixels in weightsmat
+    # multiply appropriate weight vector by csr_kermat
+    # shift the result appropriately
+    # insert the result into the appropriate memmap appropriately
+    convert_shift = np.ravel(np.swapaxes((np.ones((ker_dims[1], ker_dims[0]))*np.arange(ker_dims[0])*(img_dims[1]-ker_dims[1])), 0,1))
+
+    # simply skipping columns will lead to virtual zero-columns in the mastermat
+
+    # shifts is going to have, e.g. shape=(2,1024000)
+    #not_nan_selector = (~np.isnan(shifts[:,0]))*(~np.isnan(shifts[:,1]))
+    #relevant_pixels = np.arange(weightsmat.shape[1])[not_nan_selector].tolist()
+
+    # figure out the chunk size
+    if chunksize < 1:
+        chunksize=weightsmat.shape[1]
+
+    # add_index allows me to later insert appropriately into the memmaps
+    add_index = start_index
+
+    # iterating through the pixels
+    for pixel_ind_counter in range(min(chunksize, weightsmat.shape[1] - start_pixel)):
+        pixel_ind = pixel_ind_counter + start_pixel
+        if np.isnan(shifts[pixel_ind,0]) or np.isnan(shifts[pixel_ind,1]):
+            print("skipped pixel: ", pixel_ind)
+            continue
+        # a print statement to let us know where we are
+        print("pixel_ind: ", pixel_ind)
+        #print("add_index: ", add_index)
+
+        # multiply the csr by appropriate column in weightsmat
+        out_col = csr_mul_vec(csr_kermat, weightsmat[:,pixel_ind])
+
+        # NOTE: rotate the image here, while it is still dense
+        # use this only if already rotated in make_mastermat_save_homemade
+        # commented out to make the mastermate code usable while that's under construction
+        if rotate_psfs:
+            # we are unrotating the PSF
+            out_col = rotate_PSF(out_col, shifts[pixel_ind, :], ker_dims)
+
+        # grab only values of significant magnitude
+        nz_vals = out_col[out_col > quite_small]
+        nz_inds = np.arange(out_col.shape[0])[out_col > quite_small]
+
+        if original_shift:
+            # simply shift the nz_inds to the original pixel index
+            shifted_inds, shifted_vals = shift_PSF((nz_inds, nz_vals), np.asarray([pixel_ind//img_dims[1], pixel_ind%img_dims[1]]), img_dims, ker_dims, convert_shift)
+        # shift values (that is: shift and interpolate four surrounding corners)
+        else:
+            shifted_inds, shifted_vals = shift_PSF((nz_inds, nz_vals), shifts[pixel_ind, :], img_dims, ker_dims, convert_shift)
+
+        rows_disk[add_index:shifted_inds.shape[0] + add_index] = shifted_inds[:] # row indices
+        #out_array[1, add_index:img_row_ind.shape[0] + add_index] = pixel_ind*np.ones(img_row_ind.shape[0]) # column indices
+        cols_disk[add_index:shifted_inds.shape[0] + add_index] = pixel_ind*np.ones(shifted_inds.shape[0]) # column indices
+        #out_array[2, add_index:img_row_ind.shape[0] + add_index] = values[:] # values
+        vals_disk[add_index:shifted_inds.shape[0] + add_index] = shifted_vals[:] # values
+        # commented out flushing because numba doesn't understand it
+        #rows_disk.flush()
+        #cols_disk.flush()
+        #vals_disk.flush()
+        add_index += shifted_inds.shape[0]
+    return add_index
+
+
+#@jit(nopython=True)
+def mastermat_coo_creation_logic_homemade_memlimit(csr_kermat, weightsmat, shifts, img_dims, ker_dims,
+                                                   rows_disk_params, cols_disk_params, vals_disk_params,
+                                                   quite_small=0.001, rotate_psfs=False, original_shift=False, cols_in_memory=0):
+    """
+    Like the function above, only it doesn't keep ballooning RAM usage.
+    Instead of directly passing already-loaded memmaps, only give the arguments for their creation.
+    rows_disk_params: tuple(list args, dict kwargs)
+    cols_disk_params: tuple(list args, dict kwargs)
+    vals_disk_params: tuple(list args, dict kwargs)
+    cols_in_memory: int, how many columns to keep in memory.
+        If <=0, then all colums are kept in memory and this should function like mastermat_coo_creation_logic_homemade()
+    """
+    # first of all, if cols_in_memory is less than 1, we don't want to limit the number of columns in memory
+    if cols_in_memory < 1:
+        cols_in_memory = weightsmat.shape[1]
+
+    # keep track of where we want to process from; this is always 1 more than the last processed pixel
+    process_from = 0
+
+    # keep track of the index in the COO that we have to work from
+    start_index = 0
+
+    # iterate chunk by chunk through the indices we want to process; the columns-to-be of the master matrix
+    while process_from < weightsmat.shape[1]:
+        # create the memmaps we need:
+        rows_disk = np.memmap(*(rows_disk_params[0]), **(rows_disk_params[1]))
+        cols_disk = np.memmap(*(cols_disk_params[0]), **(cols_disk_params[1]))
+        vals_disk = np.memmap(*(vals_disk_params[0]), **(vals_disk_params[1]))
+
+        start_index = mastermat_coo_creation_logic_homemade_indexed(csr_kermat, weightsmat, shifts, img_dims, ker_dims, rows_disk, cols_disk, vals_disk,
+                                                      quite_small=0.001, rotate_psfs=rotate_psfs, original_shift=original_shift,
+                                                                    start_pixel=process_from, start_index=start_index, chunksize=cols_in_memory)
+        process_from += cols_in_memory
+        print("saving up to pixel: "+ str(process_from) + ", writing up to indes: " + str(start_index))
+        rows_disk.flush()
+        cols_disk.flush()
+        vals_disk.flush()
+
+
 def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_dims,
         savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy"), w_interp_method="nearest", s_interp_coords="cartesian", rotate_psfs=False, avg_nnz=500, original_shift=False):
     metaman = load_PSFs.MetaMan(psf_meta_path)
@@ -395,19 +518,37 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
         # so need 500
 
         prefix = name + "/"
-        row_inds = np.memmap(prefix + 'row_inds_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.uint64)
-        col_inds = np.memmap(prefix + 'col_inds_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.uint64)
-        values = np.memmap(prefix + 'values_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.float64)
+        #row_inds = np.memmap(prefix + 'row_inds_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.uint64)
+        #col_inds = np.memmap(prefix + 'col_inds_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.uint64)
+        #values = np.memmap(prefix + 'values_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.float64)
 
         #mastermat_coo_creation_logic(csr_kermat, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values)
-        mastermat_coo_creation_logic_homemade(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values, quite_small=0.001, rotate_psfs=rotate_psfs, original_shift=original_shift)
+        #mastermat_coo_creation_logic_homemade(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values, quite_small=0.001, rotate_psfs=rotate_psfs, original_shift=original_shift)
+
+        row_inds_params = ([prefix + 'row_inds_temp.dat'],{"mode":'w+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.uint64})
+        col_inds_params = ([prefix + 'col_inds_temp.dat'],{"mode":'w+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.uint64})
+        values_params = ([prefix + 'values_temp.dat'],{"mode":'w+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.uint64})
+        mastermat_coo_creation_logic_homemade_memlimit(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds_params, col_inds_params, values_params,
+                                                       quite_small=0.001, rotate_psfs=rotate_psfs, original_shift=original_shift, cols_in_memory=1000)
+
+        # we don't return anything from the creation logic function, but we just save the stuff to disk.
+        # We know how it's saved to disk in this function because that is defined above!
+        # Therefore, we know how to retrieve the results we need from disk.
+        row_inds = np.memmap(*(row_inds_params[0]), **(row_inds_params[1]))
+        col_inds = np.memmap(*(col_inds_params[0]), **(col_inds_params[1]))
+        values = np.memmap(*(values_params[0]), **(values_params[1]))
+
+
         NNZ = values[values!=0].shape[0] # the number of nonzero values
 
         row_inds_csr = np.memmap(prefix + 'row_inds_temp_csr.dat', mode='w+', shape=(img_dims[0]*img_dims[1] + 1), dtype=np.uint64)
         col_inds_csr = np.memmap(prefix + 'col_inds_temp_csr.dat', mode='w+', shape=(NNZ), dtype=np.uint64)
         values_csr = np.memmap(prefix + 'values_temp_csr.dat', mode='w+', shape=(NNZ), dtype=np.float64)
 
-        row_inds_csr, col_inds_csr, values_csr = compute_csr(row_inds, col_inds, values)
+        row_inds_nonzero = row_inds[:NNZ].copy()
+        col_inds_nonzero = col_inds[:NNZ].copy()
+        values_nonzero = values[:NNZ].copy()
+        row_inds_csr, col_inds_csr, values_csr = compute_csr(row_inds_nonzero, col_inds_nonzero, values_nonzero)
 
         np.save(savepath[0], row_inds_csr)
         np.save(savepath[1], col_inds_csr)
