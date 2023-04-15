@@ -435,6 +435,9 @@ def mastermat_coo_creation_logic_homemade_memlimit(csr_kermat, weightsmat, shift
     vals_disk_params: tuple(list args, dict kwargs)
     cols_in_memory: int, how many columns to keep in memory.
         If <=0, then all colums are kept in memory and this should function like mastermat_coo_creation_logic_homemade()
+
+    Returns:
+    start_index: int, number of nonzero values
     """
     # first of all, if cols_in_memory is less than 1, we don't want to limit the number of columns in memory
     if cols_in_memory < 1:
@@ -462,9 +465,19 @@ def mastermat_coo_creation_logic_homemade_memlimit(csr_kermat, weightsmat, shift
         cols_disk.flush()
         vals_disk.flush()
 
+        # should be unnecessary, but delete the reference to all these memmaps before reassignment to clear them
+        # so that we know we can overwrite the data in memory
+        del rows_disk
+        del cols_disk
+        del vals_disk
+
+    # return start_index
+    # start_index is the number of nonzero values
+    return start_index
 
 def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_dims,
-        savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy"), w_interp_method="nearest", s_interp_coords="cartesian", rotate_psfs=False, avg_nnz=500, original_shift=False):
+        savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy"), w_interp_method="nearest", s_interp_coords="cartesian", rotate_psfs=False,
+                                 avg_nnz=500, original_shift=False, cols_in_memory=500):
     metaman = load_PSFs.MetaMan(psf_meta_path)
     # TODO: replace generate_unpadded with one_shot_svd.generate_unpadded_rotated
     if not rotate_psfs:
@@ -525,10 +538,27 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
         #mastermat_coo_creation_logic(csr_kermat, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values)
         #mastermat_coo_creation_logic_homemade(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values, quite_small=0.001, rotate_psfs=rotate_psfs, original_shift=original_shift)
 
+        # below approach may be stupid, but I noticed that when I just created the memmaps without assigning to variables
+        # (presumably allowing them to be garbage-collected)
+        # I had bus errors later on when running the memlimit function
+        # leading me to suspect that these keep hanging out in memory.
+        # hopefully, del will actually
+        # KILL 'EM ALL!
         # create the memmaps, so that we can later open them as r+
-        np.memmap(prefix + 'row_inds_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.uint64)
-        np.memmap(prefix + 'col_inds_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.uint64)
-        np.memmap(prefix + 'values_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.float64)
+        row_inds = np.memmap(prefix + 'row_inds_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.uint64)
+        # flushes may be unnecessary...
+        row_inds.flush()
+        col_inds = np.memmap(prefix + 'col_inds_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.uint64)
+        col_inds.flush()
+        values = np.memmap(prefix + 'values_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.float64)
+        values.flush()
+
+        # this should automatically reclaim memory, because reference count to these variables will be zero
+        # exactly the same thing could be done by just never assigning these variables in the first place...
+        del row_inds
+        del col_inds
+        del values
+
 
         # when we open these later, we don't want to overwrite
         row_inds_params = ([prefix + 'row_inds_temp.dat'],{"mode":'r+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.uint64})
@@ -536,8 +566,8 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
         values_params = ([prefix + 'values_temp.dat'],{"mode":'r+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.uint64})
 
 
-        mastermat_coo_creation_logic_homemade_memlimit(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds_params, col_inds_params, values_params,
-                                                       quite_small=0.001, rotate_psfs=rotate_psfs, original_shift=original_shift, cols_in_memory=1000)
+        NNZ = mastermat_coo_creation_logic_homemade_memlimit(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds_params, col_inds_params, values_params,
+                                                       quite_small=0.001, rotate_psfs=rotate_psfs, original_shift=original_shift, cols_in_memory=cols_in_memory)
 
         # we don't return anything from the creation logic function, but we just save the stuff to disk.
         # We know how it's saved to disk in this function because that is defined above!
@@ -547,7 +577,9 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
         values = np.memmap(*(values_params[0]), **(values_params[1]))
 
 
-        NNZ = values[values!=0].shape[0] # the number of nonzero values
+        # calculating the number of nonzero values as below forces you to load the whole memmap into memory
+        # this causes a bus error when working with limited logical memory
+        #NNZ = values[values!=0].shape[0] # the number of nonzero values
         print("number of nonzero values: " + str(NNZ))
 
         row_inds_csr = np.memmap(prefix + 'row_inds_temp_csr.dat', mode='w+', shape=(img_dims[0]*img_dims[1] + 1), dtype=np.uint64)
