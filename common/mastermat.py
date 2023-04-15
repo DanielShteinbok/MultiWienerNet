@@ -525,9 +525,17 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
         #mastermat_coo_creation_logic(csr_kermat, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values)
         #mastermat_coo_creation_logic_homemade(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds, col_inds, values, quite_small=0.001, rotate_psfs=rotate_psfs, original_shift=original_shift)
 
-        row_inds_params = ([prefix + 'row_inds_temp.dat'],{"mode":'w+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.uint64})
-        col_inds_params = ([prefix + 'col_inds_temp.dat'],{"mode":'w+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.uint64})
-        values_params = ([prefix + 'values_temp.dat'],{"mode":'w+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.uint64})
+        # create the memmaps, so that we can later open them as r+
+        np.memmap(prefix + 'row_inds_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.uint64)
+        np.memmap(prefix + 'col_inds_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.uint64)
+        np.memmap(prefix + 'values_temp.dat', mode='w+', shape=(avg_nnz*img_dims[0]*img_dims[1]), dtype=np.float64)
+
+        # when we open these later, we don't want to overwrite
+        row_inds_params = ([prefix + 'row_inds_temp.dat'],{"mode":'r+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.uint64})
+        col_inds_params = ([prefix + 'col_inds_temp.dat'],{"mode":'r+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.uint64})
+        values_params = ([prefix + 'values_temp.dat'],{"mode":'r+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.uint64})
+
+
         mastermat_coo_creation_logic_homemade_memlimit(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds_params, col_inds_params, values_params,
                                                        quite_small=0.001, rotate_psfs=rotate_psfs, original_shift=original_shift, cols_in_memory=1000)
 
@@ -540,6 +548,7 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
 
 
         NNZ = values[values!=0].shape[0] # the number of nonzero values
+        print("number of nonzero values: " + str(NNZ))
 
         row_inds_csr = np.memmap(prefix + 'row_inds_temp_csr.dat', mode='w+', shape=(img_dims[0]*img_dims[1] + 1), dtype=np.uint64)
         col_inds_csr = np.memmap(prefix + 'col_inds_temp_csr.dat', mode='w+', shape=(NNZ), dtype=np.uint64)
