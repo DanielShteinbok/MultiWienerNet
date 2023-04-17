@@ -95,6 +95,6 @@ mastermat.make_mastermat_save_homemade("../data/PSFs_probe_flat_notnormalized",
                                        "../data/notnormalized_metafile.csv",
                                        img_dims, obj_dims,
         savepath = ("../data/mastermat/row_inds_notnormalized.npy", "../data/mastermat/col_inds_notmormalized.npy", "../data/mastermat/values_notnormalized.npy"),
-        w_interp_method="cubic", avg_nnz=1000, original_shift=False)
+        w_interp_method="cubic", avg_nnz=1000, original_shift=False, cols_in_memory=500)
 
 
