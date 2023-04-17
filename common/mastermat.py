@@ -486,7 +486,8 @@ def mastermat_coo_creation_logic_homemade_memlimit(csr_kermat, weightsmat, shift
 
 def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_dims,
         savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy"), w_interp_method="nearest", s_interp_coords="cartesian", rotate_psfs=False,
-                                 avg_nnz=500, original_shift=False, cols_in_memory=500):
+                                 avg_nnz=500, original_shift=False, cols_in_memory=500,
+                                 quite_small=0.001):
     metaman = load_PSFs.MetaMan(psf_meta_path)
     # TODO: replace generate_unpadded with one_shot_svd.generate_unpadded_rotated
     if not rotate_psfs:
@@ -576,7 +577,7 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
 
 
         NNZ = mastermat_coo_creation_logic_homemade_memlimit(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds_params, col_inds_params, values_params,
-                                                       quite_small=0.001, rotate_psfs=rotate_psfs, original_shift=original_shift, cols_in_memory=cols_in_memory)
+                                                       quite_small=quite_small, rotate_psfs=rotate_psfs, original_shift=original_shift, cols_in_memory=cols_in_memory)
 
         # we don't return anything from the creation logic function, but we just save the stuff to disk.
         # We know how it's saved to disk in this function because that is defined above!
