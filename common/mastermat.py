@@ -157,10 +157,19 @@ def shift_PSF(psf_sparse, shift_center, img_dims, ker_dims, convert_shift):
 
     # Had a problem with that things kind of overflowed because we are selecting by top left
     # and then potentially shifting out--be stricter by one at right and bottom
+    #shift_selector = ((kernel_row_ind % ker_dims[1] + shift[1] < img_dims[1] - 1) # within right side
+        #* (kernel_row_ind % ker_dims[1] + shift[1] > 0) # within left side
+        #* (kernel_row_ind / ker_dims[1] + shift[0] < img_dims[0] - 1) # above bottom
+        #* (kernel_row_ind / ker_dims[1] + shift[0] > 0) # below top
+        #)
+
+    # Performed vertical selection based purely on vertical coordinate;
+    # replaced floating-point division with floored division to accomplish this.
+    # did this to address a bug which led to overflow of indices, because some entries in the PSF fell off the edge.
     shift_selector = ((kernel_row_ind % ker_dims[1] + shift[1] < img_dims[1] - 1) # within right side
         * (kernel_row_ind % ker_dims[1] + shift[1] > 0) # within left side
-        * (kernel_row_ind / ker_dims[1] + shift[0] < img_dims[0] - 1) # above bottom
-        * (kernel_row_ind / ker_dims[1] + shift[0] > 0) # below top
+        * (kernel_row_ind // ker_dims[1] + shift[0] < img_dims[0] - 1) # above bottom
+        * (kernel_row_ind // ker_dims[1] + shift[0] > 0) # below top
         )
 
     #selector = shift_selector*value_selector
@@ -563,7 +572,7 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
         # when we open these later, we don't want to overwrite
         row_inds_params = ([prefix + 'row_inds_temp.dat'],{"mode":'r+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.uint64})
         col_inds_params = ([prefix + 'col_inds_temp.dat'],{"mode":'r+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.uint64})
-        values_params = ([prefix + 'values_temp.dat'],{"mode":'r+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.uint64})
+        values_params = ([prefix + 'values_temp.dat'],{"mode":'r+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.float64})
 
 
         NNZ = mastermat_coo_creation_logic_homemade_memlimit(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds_params, col_inds_params, values_params,
@@ -586,15 +595,20 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
         col_inds_csr = np.memmap(prefix + 'col_inds_temp_csr.dat', mode='w+', shape=(NNZ), dtype=np.uint64)
         values_csr = np.memmap(prefix + 'values_temp_csr.dat', mode='w+', shape=(NNZ), dtype=np.float64)
 
-        row_inds_nonzero = row_inds[:NNZ].copy()
-        col_inds_nonzero = col_inds[:NNZ].copy()
-        values_nonzero = values[:NNZ].copy()
+        #row_inds_nonzero = row_inds[:NNZ].copy()
+        #row_inds_nonzero = row_inds[:NNZ]*1
+        row_inds_nonzero = row_inds[:NNZ]
+        #col_inds_nonzero = col_inds[:NNZ].copy()
+        #col_inds_nonzero = col_inds[:NNZ]*1
+        col_inds_nonzero = col_inds[:NNZ]
+        #values_nonzero = values[:NNZ].copy()
+        #values_nonzero = values[:NNZ]*1
+        values_nonzero = values[:NNZ]
         row_inds_csr, col_inds_csr, values_csr = compute_csr(row_inds_nonzero, col_inds_nonzero, values_nonzero)
 
         np.save(savepath[0], row_inds_csr)
         np.save(savepath[1], col_inds_csr)
         np.save(savepath[2], values_csr)
-
 
 
 def make_mastermat_save(psfs_directory, psf_meta_path, img_dims, obj_dims,
