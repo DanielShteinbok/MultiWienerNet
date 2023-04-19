@@ -435,7 +435,8 @@ def mastermat_coo_creation_logic_homemade_indexed(csr_kermat, weightsmat, shifts
 #@jit(nopython=True)
 def mastermat_coo_creation_logic_homemade_memlimit(csr_kermat, weightsmat, shifts, img_dims, ker_dims,
                                                    rows_disk_params, cols_disk_params, vals_disk_params,
-                                                   quite_small=0.001, rotate_psfs=False, original_shift=False, cols_in_memory=0):
+                                                   quite_small=0.001, rotate_psfs=False, original_shift=False, cols_in_memory=0,
+                                                   avg_nnz=500):
     """
     Like the function above, only it doesn't keep ballooning RAM usage.
     Instead of directly passing already-loaded memmaps, only give the arguments for their creation.
@@ -465,14 +466,31 @@ def mastermat_coo_creation_logic_homemade_memlimit(csr_kermat, weightsmat, shift
         cols_disk = np.memmap(*(cols_disk_params[0]), **(cols_disk_params[1]))
         vals_disk = np.memmap(*(vals_disk_params[0]), **(vals_disk_params[1]))
 
-        start_index = mastermat_coo_creation_logic_homemade_indexed(csr_kermat, weightsmat, shifts, img_dims, ker_dims, rows_disk, cols_disk, vals_disk,
+        #start_index = mastermat_coo_creation_logic_homemade_indexed(csr_kermat, weightsmat, shifts, img_dims, ker_dims, rows_disk, cols_disk, vals_disk,
+                                                      #quite_small=0.001, rotate_psfs=rotate_psfs, original_shift=original_shift,
+                                                                    #start_pixel=process_from, start_index=start_index, chunksize=cols_in_memory)
+
+        # instead of passing in memmaps, just want to pass in regular numpy ndarrays
+        rows_array = np.empty(avg_nnz*cols_in_memory)
+        cols_array = np.empty(avg_nnz*cols_in_memory)
+        vals_array = np.empty(avg_nnz*cols_in_memory)
+        # num_entries tells us how many entries we will have for this chunk of columns
+        num_entries = mastermat_coo_creation_logic_homemade_indexed(csr_kermat, weightsmat, shifts, img_dims, ker_dims, rows_array, cols_array, vals_array,
                                                       quite_small=0.001, rotate_psfs=rotate_psfs, original_shift=original_shift,
-                                                                    start_pixel=process_from, start_index=start_index, chunksize=cols_in_memory)
+                                                                    start_pixel=process_from, start_index=0, chunksize=cols_in_memory)
+
+        rows_disk[start_index:start_index+num_entries] = rows_array
+        cols_disk[start_index:start_index+num_entries] = rows_array
+        vals_disk[start_index:start_index+num_entries] = rows_array
+
         process_from += cols_in_memory
-        print("saving up to pixel: "+ str(process_from) + ", writing up to indes: " + str(start_index))
+        print("saving up to pixel: "+ str(process_from) + ", writing up to index: " + str(start_index))
         rows_disk.flush()
         cols_disk.flush()
         vals_disk.flush()
+
+        # we will want to start from the next index in adding to the memmaps in the future
+        start_index += num_entries
 
         # should be unnecessary, but delete the reference to all these memmaps before reassignment to clear them
         # so that we know we can overwrite the data in memory
