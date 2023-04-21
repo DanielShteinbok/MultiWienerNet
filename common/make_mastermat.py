@@ -89,17 +89,41 @@ obj_dims = (640, 1024)
                                        #"../data/nV3_PSFs_flat_meta/metafile_probe_mark.csv",
                                        #img_dims, obj_dims,
         #savepath = ("row_inds_probe_green_undistorted_corrected_csr.npy", "col_inds_probe_green_undistorted_corrected_csr.npy", "values_probe_green_undistorted_corrected_csr.npy"),
-        #w_interp_method="cubic", avg_nnz=1000, original_shift=True)
+        #w_interp_method="cubic", avg_nnz=1000, original_shift=False)
 
 #mastermat.make_mastermat_save_homemade("../data/PSFs_probe_flat_notnormalized",
                                        #"../data/notnormalized_metafile.csv",
                                        #img_dims, obj_dims,
         #savepath = ("../data/mastermat/row_inds_notnormalized.npy", "../data/mastermat/col_inds_notmormalized.npy", "../data/mastermat/values_notnormalized.npy"),
+        #w_interp_method="cubic", avg_nnz=1000, original_shift=False, cols_in_memory=100, quite_small=0.001)
+
+#mastermat.make_mastermat_save_homemade("../data/PSFs_probe_flat_normalized",
+                                       #"../data/normalized_metafile.csv",
+                                       #img_dims, obj_dims,
+        #savepath = ("../data/mastermat/row_inds_normalized.npy", "../data/mastermat/col_inds_normalized.npy","../data/mastermat/values_normalized.npy"),
         #w_interp_method="cubic", avg_nnz=1000, original_shift=False, cols_in_memory=500, quite_small=0.001)
 
-mastermat.make_mastermat_save_homemade("../data/PSFs_probe_flat_normalized",
-                                       "../data/normalized_metafile.csv",
-                                       img_dims, obj_dims,
-        savepath = ("../data/mastermat/row_inds_normalized.npy", "../data/mastermat/col_inds_normalized.npy", "../data/mastermat/values_normalized.npy"),
-        w_interp_method="cubic", avg_nnz=1000, original_shift=False, cols_in_memory=500, quite_small=0.001)
 
+#mastermat.make_mastermat_save_homemade("../data/PSFs_probe_flat_ringed_green",
+                                       #"../data/ringed_green_metafile.csv",
+                                       #img_dims, obj_dims,
+        #savepath = ("../data/mastermat/row_inds_ringed.npy", "../data/mastermat/col_inds_ringed.npy","../data/mastermat/values_ringed.npy"),
+        #w_interp_method="cubic", avg_nnz=2000, original_shift=False, cols_in_memory=200, quite_small=0.001)
+
+#mastermat.make_mastermat_save_homemade("../data/PSFs_curved_notnormalized",
+                                       #"../data/curved_notnormalized_metafile.csv",
+                                       #img_dims, obj_dims,
+        #savepath = ("../data/mastermat/row_inds_curved.npy", "../data/mastermat/col_inds_curved.npy","../data/mastermat/values_curved.npy"),
+        #w_interp_method="cubic", avg_nnz=2000, original_shift=False, cols_in_memory=200, quite_small=0.001)
+
+#mastermat.make_mastermat_save_homemade("../data/PSFs_ringed_curved_notnormalized",
+                                       #"../data/ringed_curved_notnormalized_metafile.csv",
+                                       #img_dims, obj_dims,
+        #savepath = ("../data/mastermat/row_inds_ringed_curved.npy", "../data/mastermat/col_inds_ringed_curved.npy","../data/mastermat/values_ringed_curved.npy"),
+        #w_interp_method="cubic", avg_nnz=2000, original_shift=False, cols_in_memory=200, quite_small=0.001)
+
+mastermat.make_mastermat_save_homemade("../data/PSFs_ringed_curved_normalized",
+                                       "../data/ringed_curved_normalized_metafile.csv",
+                                       img_dims, obj_dims,
+        savepath = ("../data/mastermat/row_inds_ringed_curved_normalized.npy", "../data/mastermat/col_inds_ringed_curved_normalized.npy","../data/mastermat/values_ringed_curved_normalized.npy"),
+        w_interp_method="cubic", avg_nnz=2000, original_shift=False, cols_in_memory=200, quite_small=0.001)
