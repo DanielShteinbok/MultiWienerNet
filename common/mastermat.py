@@ -350,7 +350,7 @@ def mastermat_coo_creation_logic_homemade(csr_kermat, weightsmat, shifts, img_di
 
 @jit(nopython=True)
 #@jit(debug=True)
-def mastermat_coo_creation_logic_homemade_indexed(csr_kermat, weightsmat, shifts, img_dims, ker_dims,
+def mastermat_coo_creation_logic_homemade_indexed(csr_kermat, weightsmat, shifts, strehl_ratios, img_dims, ker_dims,
                                                   rows_disk, cols_disk, vals_disk,
                                                   quite_small=0.001, rotate_psfs=False, original_shift=False, start_pixel=0, start_index=0, chunksize=0):
     """
@@ -398,8 +398,9 @@ def mastermat_coo_creation_logic_homemade_indexed(csr_kermat, weightsmat, shifts
         print("pixel_ind: ", pixel_ind)
         #print("add_index: ", add_index)
 
+        # EDIT: multiply by the Strehl ratio
         # multiply the csr by appropriate column in weightsmat
-        out_col = csr_mul_vec(csr_kermat, weightsmat[:,pixel_ind])
+        out_col = csr_mul_vec(csr_kermat, weightsmat[:,pixel_ind])*strehl_ratios[pixel_ind]
 
         # NOTE: rotate the image here, while it is still dense
         # use this only if already rotated in make_mastermat_save_homemade
@@ -432,7 +433,7 @@ def mastermat_coo_creation_logic_homemade_indexed(csr_kermat, weightsmat, shifts
     return add_index
 
 
-def mastermat_coo_creation_logic_homemade_memlimit(csr_kermat, weightsmat, shifts, img_dims, ker_dims,
+def mastermat_coo_creation_logic_homemade_memlimit(csr_kermat, weightsmat, shifts, strehl_ratios, img_dims, ker_dims,
                                                    rows_disk_params, cols_disk_params, vals_disk_params,
                                                    quite_small=0.001, rotate_psfs=False, original_shift=False, cols_in_memory=0,
                                                    avg_nnz=500):
@@ -469,7 +470,7 @@ def mastermat_coo_creation_logic_homemade_memlimit(csr_kermat, weightsmat, shift
         vals_disk = np.memmap(*(vals_disk_params[0]), **(vals_disk_params[1]))
 
 
-        start_index = mastermat_coo_creation_logic_homemade_indexed(csr_kermat, weightsmat, shifts, img_dims, ker_dims, rows_disk, cols_disk, vals_disk,
+        start_index = mastermat_coo_creation_logic_homemade_indexed(csr_kermat, weightsmat, shifts, strehl_ratios, img_dims, ker_dims, rows_disk, cols_disk, vals_disk,
                                                       quite_small=0.001, rotate_psfs=rotate_psfs, original_shift=original_shift,
                                                                     start_pixel=process_from, start_index=start_index, chunksize=cols_in_memory)
 
@@ -516,7 +517,7 @@ def mastermat_coo_creation_logic_homemade_memlimit(csr_kermat, weightsmat, shift
     return start_index
 
 def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_dims,
-        savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy"), w_interp_method="nearest", s_interp_coords="cartesian", rotate_psfs=False,
+        savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy"), w_interp_method="nearest", strehl_interp_method=None s_interp_coords="cartesian", rotate_psfs=False,
                                  avg_nnz=500, original_shift=False, cols_in_memory=500,
                                  quite_small=0.001):
     metaman = load_PSFs.MetaMan(psf_meta_path)
@@ -535,6 +536,13 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
     elif s_interp_coords=="circular":
         shifts = one_shot_svd.interpolate_shifts_circular(metaman, img_dims, obj_dims)
 
+    # we have the opportunity to ignore the Strehl ratios
+    # by keeping strehl_interp_method=None
+    # otherwise, we can use the same parameter to control how the interpolation is done.
+    if strehl_interp_method is None:
+        strehl_ratios = np.ones(img_dims[0]*img_dims[1])
+    else:
+        strehl_ratios = one_shot_svd.interpolate_Strehl(metaman, img_dims, obj_dims, method=strehl_interp_method)
     # the reshaped matrix of PSFs, where each column is a vectorized PSF
     #kermat = psfs.reshape((psfs.shape[0]*psfs.shape[1], psfs.shape[2]))
     # reshape tries to change the last axis first, so we need to transpose the matrix
@@ -607,7 +615,7 @@ def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_di
         values_params = ([prefix + 'values_temp.dat'],{"mode":'r+', "shape": (avg_nnz*img_dims[0]*img_dims[1]), "dtype": np.float64})
 
 
-        NNZ = mastermat_coo_creation_logic_homemade_memlimit(kermat_tuple, weightsmat, shifts, img_dims, h.shape, row_inds_params, col_inds_params, values_params,
+        NNZ = mastermat_coo_creation_logic_homemade_memlimit(kermat_tuple, weightsmat, shifts, strehl_ratios, img_dims, h.shape, row_inds_params, col_inds_params, values_params,
                                                        quite_small=quite_small, rotate_psfs=rotate_psfs, original_shift=original_shift, cols_in_memory=cols_in_memory,
                                                              avg_nnz=avg_nnz)
 
