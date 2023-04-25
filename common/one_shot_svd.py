@@ -466,6 +466,50 @@ def generate_unpadded_nosvd_nonorm(psf_directory, metaman, img_dims, obj_dims, m
 
     return h, weights
 
+def interpolate_Strehl(metaman, img_dims, obj_dims, method="cubic"):
+    """
+    Interpolate the Strehl ratio over the field of view.
+    img_dims: pixel dimensions of the image, of shape (y,x)
+        obj_dims: micron dimensions of the object, of shape (y,x)
+        metaman: instance of tensorflow/load_PSFs.MetaMan, which manages the field origin and shift information
+    Returns:
+        img_dims[0]*img_dims[1]-entry vector, where the k-th entry corresponds to the k-th pixel on the image
+
+    """
+    # SKETCH OF SOLUTION:
+    # as below, we want to interpolate the Strehl ratio based on location
+    # location is by pixel on the object.
+    # What we have for each PSF is the Strehl ratio and associated location on object, in microns.
+    # Thus, we will want to first figure out all the locations of the Fields
+    # in terms of pixels, and then interpolate the Strehl ratios for all input pixels.
+
+    # creating the meshgrid to represent the image axes:
+    xq = np.arange(-img_dims[1]/2,img_dims[1]/2);
+    yq = np.arange(-img_dims[0]/2,img_dims[0]/2);
+    [Xq, Yq] = np.meshgrid(xq,yq);
+
+    # create lists of x_origin, y_origin, and Strehl ratio
+    x_origin = []
+    y_origin = []
+    strehl_ratios = []
+    strehl_ratios_dict = metaman.strehl_ratios
+    origins = metaman.field_origins
+    for key in strehl_ratios_dict.keys():
+        # we need to simply move all the strehl ratios from the dict to the list
+        strehl_ratios.append(strehl_ratios_dict[key])
+        # origins can be 0 at center of image, because the meshgrids
+        # range over (-dim/2, dim/2)
+        # nonetheless, we actually want to interpolate Strehl ratios over pixels
+        this_origin = find_pixel_on_obj(*(origins[key]), img_dims, obj_dims)
+        x_origin.append(this_origin[0])
+        y_origin.append(this_origin[1])
+
+    strehl_int = scipy.interpolate.griddata((y_origin, x_origin), strehl_ratios, (Yq,Xq),method=method)
+
+    strehl_out = np.zeros((1, img_dims[0], img_dims[1]))
+    strehl_out[0,:,:] = strehl_int
+    return strehl_out.reshape((1,img_dims[0]*img_dims[1])).swapaxes(0,1)
+
 
 def interpolate_shifts(metaman, img_dims, obj_dims, method="cubic"):
 #def interpolate_shifts(metaman, img_dims, obj_dims):
