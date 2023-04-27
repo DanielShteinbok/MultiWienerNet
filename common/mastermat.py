@@ -517,7 +517,7 @@ def mastermat_coo_creation_logic_homemade_memlimit(csr_kermat, weightsmat, shift
     return start_index
 
 def make_mastermat_save_homemade(psfs_directory, psf_meta_path, img_dims, obj_dims,
-        savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy"), w_interp_method="nearest", strehl_interp_method=None s_interp_coords="cartesian", rotate_psfs=False,
+        savepath = ("row_inds_csr.npy", "col_inds_csr.npy", "values_csr.npy"), w_interp_method="nearest", strehl_interp_method=None, s_interp_coords="cartesian", rotate_psfs=False,
                                  avg_nnz=500, original_shift=False, cols_in_memory=500,
                                  quite_small=0.001):
     metaman = load_PSFs.MetaMan(psf_meta_path)
