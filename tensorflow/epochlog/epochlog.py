@@ -43,6 +43,11 @@ class BaseEpochLogger:
             self.epochlog = open(self.logpath, 'w+')
             self.num_epochs = 0
             self.epochlog.write('0')
+            # apparently, this written '0' does not get flushed to the file
+            # this means that if there is, e.g. an error while calculating the gradient,
+            # on the next run we will load an existing, empty file from which we will be unable to read the epoch.
+            # Thus, must flush what we've written
+            self.epochlog.flush()
         
     def load_weights(self):
         # FIXME should get rid of this, decide whether to load weights upon function instantiation
